@@ -99,6 +99,11 @@ def format_messages(messages: list[Message]) -> list[dict]:
                     "tool_calls": tool_calls,
                 }
             )
+            # add interleaved thinking content if exists
+            if message.raw_data is not None and message.raw_data.get("message") is not None:
+                reasoning_content = message.raw_data["message"].get("reasoning_content")
+                if reasoning_content:
+                    messages_formatted[-1]["reasoning_content"] = reasoning_content
         elif isinstance(message, ToolMessage):
             messages_formatted.append(
                 {
