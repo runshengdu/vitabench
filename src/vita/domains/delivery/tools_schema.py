@@ -42,7 +42,7 @@ TOOL_DESCRIPTIONS_ZH = {
         "tool_type": "READ"
     },
 
-    "delivery_store_search_recommand": {
+    "delivery_store_search_recommend": {
         "description": "在外卖场景下，可以根据用户表达抽取出描述商家的关键词，搜索或推荐多个商家",
         "preconditions": "处于外卖场景，获取描述商家的关键词",
         "postconditions": "返回商家列表，引导用户选择确定商家",
@@ -53,7 +53,7 @@ TOOL_DESCRIPTIONS_ZH = {
         "tool_type": "READ"
     },
 
-    "delivery_product_search_recommand": {
+    "delivery_product_search_recommend": {
         "description": "在外卖场景下，可以根据用户表达抽取出描述商品的关键词，搜索或推荐多个商品",
         "preconditions": "处于外卖场景，获取描述商品的关键词",
         "postconditions": "返回商品列表，引导用户选择商品并创建订单",
@@ -186,7 +186,7 @@ TOOL_DESCRIPTIONS_EN = {
         "tool_type": "READ"
     },
 
-    "delivery_store_search_recommand": {
+    "delivery_store_search_recommend": {
         "description": "In delivery scenario, can extract keywords describing stores from user expressions, search or recommend multiple stores",
         "preconditions": "In delivery scenario, get keywords describing stores",
         "postconditions": "Return store list, guide user to select and confirm store",
@@ -197,7 +197,7 @@ TOOL_DESCRIPTIONS_EN = {
         "tool_type": "READ"
     },
 
-    "delivery_product_search_recommand": {
+    "delivery_product_search_recommend": {
         "description": "In delivery scenario, can extract keywords describing food from user expressions, search or recommend multiple food items",
         "preconditions": "In delivery scenario, get keywords describing food",
         "postconditions": "Return food list, guide user to select food and create order",

@@ -237,10 +237,10 @@ def run_tasks(
     random.seed(seed)
 
     seeds = [random.randint(0, 1000000) for _ in range(num_trials)]
-    if "seed" in llm_args_agent:
+    if llm_args_agent is not None and "seed" in llm_args_agent:
         logger.warning("Each trial will modify the seed for the agent")
 
-    if "seed" in llm_args_user:
+    if llm_args_user is not None and "seed" in llm_args_user:
         logger.warning("Each trial will modify the seed for the user")
 
     lock = threading.Lock()
@@ -392,8 +392,8 @@ def run_tasks(
             return {"status": "failed", "task_id": task.id, "trial": trial, "error": str(e)}
 
     args = []
-    for i, task in enumerate(tasks):
-        for trial in range(num_trials):
+    for trial in range(num_trials):
+        for i, task in enumerate(tasks):
             if (trial, task.id, seeds[trial]) in done_runs:
                 ConsoleDisplay.console.print(
                     f"[bold yellow]Skipping task {task.id}, trial {trial} because it has already been run.[/bold yellow]"

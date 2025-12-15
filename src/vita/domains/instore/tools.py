@@ -170,33 +170,94 @@ class InStoreTools(ToolKitBase):
 
     @is_tool(tool_type=ToolType.READ)
     def instore_shop_search_recommend(self, keywords: List[str]) -> str:
-        top_k = 1000
+        assert keywords, "Keywords cannot be empty"
+        assert isinstance(keywords, list), "Keywords must be a list"
+        assert all(isinstance(kw, str) and kw.strip() for kw in keywords), "All keywords must be non-empty strings"
+        
+        top_k = 50
         shop_tag_dict = self._get_shop_tags()
-        id_candidates_sorted = rerank("".join(keywords), shop_tag_dict)
-        selected_ids = [ic[0] for ic in id_candidates_sorted[:top_k]]
-        selected_shops = [str(self._get_shop(shop_id)) for shop_id in selected_ids]
-        selected_shops_repr = "\n".join(selected_shops)
-        return selected_shops_repr
+        if not shop_tag_dict:
+            return "No shops available"
+        
+        try:
+            keywords_str = "".join(keywords)
+            assert keywords_str and keywords_str.strip(), "Keywords cannot be empty"
+            id_candidates_sorted = rerank(keywords_str, shop_tag_dict)
+            selected_ids = [ic[0] for ic in id_candidates_sorted[:top_k]]
+            if not selected_ids:
+                return "No shops found matching the keywords"
+            
+            selected_shops = []
+            for shop_id in selected_ids:
+                try:
+                    selected_shops.append(str(self._get_shop(shop_id)))
+                except ValueError:
+                    continue
+            
+            if not selected_shops:
+                return "No shops found matching the keywords"
+            
+            selected_shops_repr = "\n".join(selected_shops)
+            return selected_shops_repr
+        except Exception as e:
+            return f"Error searching shops: {e}"
 
     @is_tool(tool_type=ToolType.READ)
     def instore_product_search_recommend(self, keywords: List[str]) -> str:
-        top_k = 1000
+        assert keywords, "Keywords cannot be empty"
+        assert isinstance(keywords, list), "Keywords must be a list"
+        assert all(isinstance(kw, str) and kw.strip() for kw in keywords), "All keywords must be non-empty strings"
+        
+        top_k = 50
         product_tag_dict = self._get_shop_product_tags()
-        id_candidates_sorted = rerank("".join(keywords), product_tag_dict)
-        selected_ids = [ic[0] for ic in id_candidates_sorted[:top_k]]
-        product_list = [self._get_shop_product(product_id) for product_id in selected_ids]
-        selected_products_repr = "\n".join([repr(product) for product in product_list])
-        return selected_products_repr
+        if not product_tag_dict:
+            return "No products available"
+        
+        try:
+            keywords_str = "".join(keywords)
+            assert keywords_str and keywords_str.strip(), "Keywords cannot be empty"
+            id_candidates_sorted = rerank(keywords_str, product_tag_dict)
+            selected_ids = [ic[0] for ic in id_candidates_sorted[:top_k]]
+            if not selected_ids:
+                return "No products found matching the keywords"
+            
+            product_list = []
+            for product_id in selected_ids:
+                try:
+                    product_list.append(self._get_shop_product(product_id))
+                except ValueError:
+                    continue
+            
+            if not product_list:
+                return "No products found matching the keywords"
+            
+            selected_products_repr = "\n".join([repr(product) for product in product_list])
+            return selected_products_repr
+        except Exception as e:
+            return f"Error searching products: {e}"
 
     @is_tool(tool_type=ToolType.WRITE)
     def create_instore_product_order(self, user_id: str, shop_id: str, product_id: str, quantity: int = 1) -> str:
         assert user_id, "User ID cannot be empty"
         assert self._check_user(user_id), "User ID does not match"
-        assert shop_id in self.db.shops, "Shop does not exist"
-        assert product_id in [product.product_id for product in self._get_shop(shop_id).products], "Product does not exist"
+        assert shop_id, "Shop ID cannot be empty"
+        assert product_id, "Product ID cannot be empty"
+        assert isinstance(quantity, int), "Quantity must be an integer"
         assert quantity > 0, "Quantity must be greater than 0"
+        
+        try:
+            shop = self._get_shop(shop_id)
+        except ValueError as e:
+            return f"Error: {e}"
+        
+        if product_id not in [product.product_id for product in shop.products]:
+            return f"Product {product_id} does not exist in shop {shop_id}"
 
-        product = self._get_shop_product(product_id)
+        try:
+            product = self._get_shop_product(product_id)
+        except ValueError as e:
+            return f"Error: {e}"
+        
         product.quantity = quantity
         
         order = Order(
@@ -212,51 +273,69 @@ class InStoreTools(ToolKitBase):
         )
 
         response = self._add_instore_order(order)
-        return repr(order) if response == "done" else response
+        if response == "done":
+            return repr(order)
+        else:
+            return f"Failed to create order: {response}"
 
 
     @is_tool(tool_type=ToolType.WRITE)
     def pay_instore_order(self, order_id: str) -> str:
-
         assert order_id, "Order ID cannot be empty"
-
-        order = self._get_instore_order(order_id)
+        
+        try:
+            order = self._get_instore_order(order_id)
+        except ValueError as e:
+            return f"Error: {e}"
+        
         if order.status == "unpaid":
             order.status = "paid"
             order.update_time = self.get_now("%Y-%m-%d %H:%M:%S")
-            self._modify_instore_order(order)
+            resp = self._modify_instore_order(order)
+            if resp == "done":
+                return "Payment successful"
+            else:
+                return f"Payment failed: {resp}"
         else:
-            return f"Order {order_id} is not in `unpaid` status."
-        return "Payment successful"
+            return f"Order {order_id} is not in `unpaid` status. Current status: {order.status}"
     
     @is_tool(tool_type=ToolType.WRITE)
     def instore_cancel_order(self, order_id: str) -> str:
-
         assert order_id, "Order ID cannot be empty"
-
-        order = self._get_instore_order(order_id)
+        
+        try:
+            order = self._get_instore_order(order_id)
+        except ValueError as e:
+            return f"Error: {e}"
+        
         if order.status in ["cancelled"]:
             return f"Order {order.order_id} is already cancelled."
+        
         order.status = "cancelled"
         order.update_time = self.get_now("%Y-%m-%d %H:%M:%S")
         resp = self._modify_instore_order(order)
         if resp == "done":
             return f"Order {order.order_id} is cancelled."
         else:
-            return resp
+            return f"Cancellation failed: {resp}"
 
     @is_tool(tool_type=ToolType.WRITE)
     def instore_book(self, user_id: str, shop_id: str, time: str, customer_count: int = 1) -> str:
-
         assert user_id, "User ID cannot be empty"
         assert self._check_user(user_id), "User ID does not match"
-        assert shop_id in self.db.shops, "Shop does not exist"
-        assert customer_count > 0, "Number of customers for table booking must be greater than 0"
+        assert shop_id, "Shop ID cannot be empty"
         assert time, "Table booking time cannot be empty"
+        assert isinstance(customer_count, int), "Customer count must be an integer"
+        assert customer_count > 0, "Number of customers for table booking must be greater than 0"
         assert check_time_format(time, "%Y-%m-%d %H:%M:%S"), "Table booking time format is incorrect, correct format is %Y-%m-%d %H:%M:%S"
 
-        shop = self.db.shops[shop_id]
-        assert shop.enable_book, "Shop does not support table booking"
+        try:
+            shop = self._get_shop(shop_id)
+        except ValueError as e:
+            return f"Error: {e}"
+        
+        if not shop.enable_book:
+            return f"Shop {shop_id} does not support table booking"
 
         book_price = shop.book_price
         status = "unpaid" if book_price > 0 else "paid"
@@ -273,15 +352,21 @@ class InStoreTools(ToolKitBase):
         )
         
         response = self._add_book_info(book_info)
-        return repr(book_info) if response == "done" else response
+        if response == "done":
+            return repr(book_info)
+        else:
+            return f"Failed to create booking: {response}"
 
     
     @is_tool(tool_type=ToolType.WRITE)
     def pay_instore_book(self, book_id: str) -> str:
-
         assert book_id, "Booking ID cannot be empty"
-
-        book_info = self._get_book_info(book_id)
+        
+        try:
+            book_info = self._get_book_info(book_id)
+        except ValueError as e:
+            return f"Error: {e}"
+        
         if book_info.status == "unpaid":
             book_info.status = "paid"
             book_info.update_time = self.get_now("%Y-%m-%d %H:%M:%S")
@@ -289,35 +374,44 @@ class InStoreTools(ToolKitBase):
             if resp == "done":
                 return "Payment successful"
             else:
-                return resp
+                return f"Payment failed: {resp}"
         else:
-            return f"BookInfo {book_info.book_id} is not in `unpaid` status."
+            return f"BookInfo {book_info.book_id} is not in `unpaid` status. Current status: {book_info.status}"
         
     @is_tool(tool_type=ToolType.WRITE)
     def instore_cancel_book(self, book_id: str) -> str:
-
         assert book_id, "Booking ID cannot be empty"
-
-        book_info = self._get_book_info(book_id)
+        
+        try:
+            book_info = self._get_book_info(book_id)
+        except ValueError as e:
+            return f"Error: {e}"
+        
         if book_info.status in ["cancelled"]:
             return f"BookInfo {book_info.book_id} is already cancelled."
+        
         book_info.status = "cancelled"
         book_info.update_time = self.get_now("%Y-%m-%d %H:%M:%S")
         resp = self._modify_book_info(book_info)
         if resp == "done":
             return f"BookInfo {book_info.book_id} is cancelled."
         else:
-            return resp
+            return f"Cancellation failed: {resp}"
         
     @is_tool(tool_type=ToolType.WRITE)
     def instore_reservation(self, user_id: str, shop_id: str, time: str, customer_count: int = 1) -> str:
-
         assert user_id, "User ID cannot be empty"
         assert self._check_user(user_id), "User ID does not match"
-        assert shop_id in self.db.shops, "Shop does not exist"
-
-        assert check_time_format(time, "%Y-%m-%d %H:%M:%S"), "Reservation time format is incorrect, correct format is %Y-%m-%d %H:%M:%S"
+        assert shop_id, "Shop ID cannot be empty"
+        assert time, "Reservation time cannot be empty"
+        assert isinstance(customer_count, int), "Customer count must be an integer"
         assert customer_count > 0, "Number of customers for reservation must be greater than 0"
+        assert check_time_format(time, "%Y-%m-%d %H:%M:%S"), "Reservation time format is incorrect, correct format is %Y-%m-%d %H:%M:%S"
+
+        try:
+            shop = self._get_shop(shop_id)
+        except ValueError as e:
+            return f"Error: {e}"
 
         reservation = ReservationInfo(
             reservation_id=self.db.assign_order_id("instore_reservation", user_id),
@@ -333,21 +427,24 @@ class InStoreTools(ToolKitBase):
         if response == "done":
             return repr(reservation)
         else:
-            return response
+            return f"Failed to create reservation: {response}"
 
     @is_tool(tool_type=ToolType.WRITE)
     def instore_modify_reservation(self, reservation_id: str, time: str,
                                    customer_count: int = 0) -> str:
-
         assert reservation_id, "Reservation ID cannot be empty"
+        assert time, "Reservation time cannot be empty"
+        assert isinstance(customer_count, int), "Customer count must be an integer"
+        assert customer_count >= 0, "Number of customers for reservation must be greater than or equal to 0"
+        assert check_time_format(time, "%Y-%m-%d %H:%M:%S"), "Reservation time format is incorrect, correct format is %Y-%m-%d %H:%M:%S"
 
-        reservation_info = self._get_reservation_info(reservation_id)
+        try:
+            reservation_info = self._get_reservation_info(reservation_id)
+        except ValueError as e:
+            return f"Error: {e}"
+        
         if reservation_info.status in ["consumed", "cancelled"]:
             return f"ReservationInfo {reservation_info.reservation_id} is already {reservation_info.status}."
-
-        assert customer_count >= 0, "Number of customers for reservation must be greater than or equal to 0"
-        assert time, "Reservation time cannot be empty"
-        assert check_time_format(time, "%Y-%m-%d %H:%M:%S"), "Reservation time format is incorrect, correct format is %Y-%m-%d %H:%M:%S"
 
         reservation_info.reservation_time = time
         reservation_info.customer_count = customer_count
@@ -356,23 +453,27 @@ class InStoreTools(ToolKitBase):
         if resp == "done":
             return repr(reservation_info)
         else:
-            return resp
+            return f"Modification failed: {resp}"
 
     @is_tool(tool_type=ToolType.WRITE)
     def instore_cancel_reservation(self, reservation_id: str) -> str:
-
         assert reservation_id, "Reservation ID cannot be empty"
-
-        reservation_info = self._get_reservation_info(reservation_id)
+        
+        try:
+            reservation_info = self._get_reservation_info(reservation_id)
+        except ValueError as e:
+            return f"Error: {e}"
+        
         if reservation_info.status in ["cancelled"]:
             return f"ReservationInfo {reservation_info.reservation_id} is already cancelled."
+        
         reservation_info.status = "cancelled"
         reservation_info.update_time = self.get_now("%Y-%m-%d %H:%M:%S")
         resp = self._modify_reservation_info(reservation_info)
         if resp == "done":
             return f"ReservationInfo {reservation_info.reservation_id} is cancelled."
         else:
-            return resp
+            return f"Cancellation failed: {resp}"
 
 
     @is_tool(tool_type=ToolType.READ)

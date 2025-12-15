@@ -209,68 +209,105 @@ class OTATools(ToolKitBase):
             return f"Error: {e}"
 
     @is_tool(tool_type=ToolType.READ)
-    def hotel_search_recommand(self,
+    def hotel_search_recommend(self,
                                city_name: str,
                                key_words: Optional[List[str]] = None) -> str:
-
-        target_hotels = []
-        for hotel in self._get_hotel():
-            if not fuzzy_match(city_name, hotel.location.address):
-                continue
-
-            target_hotels.append(hotel)
-
-        top_k = 100
-        if not target_hotels:
-            return "No hotels found matching the criteria. Please check if the city name is correct and try again."
+        assert city_name, "City name cannot be empty"
+        assert isinstance(city_name, str), "City name must be a string"
         
-        hotel_tag_dict = {}
-        for hotel in target_hotels:
-            hotel_tag_dict[hotel.hotel_id] = self._get_hotel_tags(hotel.hotel_id)
-        id_candidates_sorted = rerank("".join(key_words or []), hotel_tag_dict)
-        selected_ids = [ic[0] for ic in id_candidates_sorted[:top_k]]
-        selected_hotels = [str(self._get_hotel(hotel_id)) for hotel_id in selected_ids]
-        selected_hotels_repr = "\n".join(selected_hotels)
-        return selected_hotels_repr
+        if key_words is not None:
+            assert isinstance(key_words, list), "Key words must be a list"
+            assert all(isinstance(kw, str) and kw.strip() for kw in key_words), "All key words must be non-empty strings"
+
+        try:
+            target_hotels = []
+            for hotel in self._get_hotel():
+                if not fuzzy_match(city_name, hotel.location.address):
+                    continue
+                target_hotels.append(hotel)
+
+            top_k = 50
+            if not target_hotels:
+                return "No hotels found matching the criteria."
+            
+            hotel_tag_dict = {}
+            for hotel in target_hotels:
+                hotel_tag_dict[hotel.hotel_id] = self._get_hotel_tags(hotel.hotel_id)
+            
+            keywords_str = "".join(key_words or [])
+            assert keywords_str and keywords_str.strip(), "Keywords cannot be empty"
+            id_candidates_sorted = rerank(keywords_str, hotel_tag_dict)
+            selected_ids = [ic[0] for ic in id_candidates_sorted[:top_k]]
+            
+            if not selected_ids:
+                return "No hotels found matching the keywords"
+            
+            selected_hotels = [str(self._get_hotel(hotel_id)) for hotel_id in selected_ids]
+            selected_hotels_repr = "\n".join(selected_hotels)
+            return selected_hotels_repr
+        except Exception as e:
+            return f"Error searching hotels: {e}"
 
     @is_tool(tool_type=ToolType.READ)
     def attractions_search_recommend(self, city_name: str, key_words: List[str]) -> str:
+        assert city_name, "City name cannot be empty"
+        assert isinstance(city_name, str), "City name must be a string"
+        assert key_words, "Key words cannot be empty"
+        assert isinstance(key_words, list), "Key words must be a list"
+        assert all(isinstance(kw, str) and kw.strip() for kw in key_words), "All key words must be non-empty strings"
 
-        target_attractions = []
-        for attraction in self._get_attraction():
-            if not fuzzy_match(city_name, attraction.location.address):
-                continue
-            target_attractions.append(attraction)
-        top_k = 100
-        if not target_attractions:
-            return "No attractions found matching the criteria. Please check if the city name is correct and try again."
-        
-        attraction_tag_dict = {}
-        for attraction in target_attractions:
-            attraction_tag_dict[attraction.attraction_id] = self._get_attraction_tags(attraction.attraction_id)
-        id_candidates_sorted = rerank("".join(key_words), attraction_tag_dict)
-        selected_ids = [ic[0] for ic in id_candidates_sorted[:top_k]]
-        selected_attractions = [str(self._get_attraction(attraction_id)) for attraction_id in selected_ids]
-        selected_attractions_repr = "\n".join(selected_attractions)
-        return selected_attractions_repr
+        try:
+            target_attractions = []
+            for attraction in self._get_attraction():
+                if not fuzzy_match(city_name, attraction.location.address):
+                    continue
+                target_attractions.append(attraction)
+            
+            top_k = 50
+            if not target_attractions:
+                return "No attractions found matching the criteria."
+            
+            attraction_tag_dict = {}
+            for attraction in target_attractions:
+                attraction_tag_dict[attraction.attraction_id] = self._get_attraction_tags(attraction.attraction_id)
+            
+            keywords_str = "".join(key_words)
+            assert keywords_str and keywords_str.strip(), "Keywords cannot be empty"
+            id_candidates_sorted = rerank(keywords_str, attraction_tag_dict)
+            selected_ids = [ic[0] for ic in id_candidates_sorted[:top_k]]
+            
+            if not selected_ids:
+                return "No attractions found matching the keywords"
+            
+            selected_attractions = [str(self._get_attraction(attraction_id)) for attraction_id in selected_ids]
+            selected_attractions_repr = "\n".join(selected_attractions)
+            return selected_attractions_repr
+        except Exception as e:
+            return f"Error searching attractions: {e}"
 
     @is_tool(tool_type=ToolType.READ)
     def flight_search_recommend(self, departure: str, destination: str) -> str:
-
         assert departure, "Departure city cannot be empty"
         assert destination, "Destination city cannot be empty"
-        target_flights = []
-        for flight in self._get_flight():
-            if not fuzzy_match(departure, flight.departure_city):
-                continue
-            if not fuzzy_match(destination, flight.arrival_city):
-                continue
-            target_flights.append(flight)
-        if not target_flights:
-            return "No flights found matching the criteria"
+        assert isinstance(departure, str), "Departure city must be a string"
+        assert isinstance(destination, str), "Destination city must be a string"
         
-        flights_repr = "\n".join([str(flight) for flight in target_flights])
-        return flights_repr
+        try:
+            target_flights = []
+            for flight in self._get_flight():
+                if not fuzzy_match(departure, flight.departure_city):
+                    continue
+                if not fuzzy_match(destination, flight.arrival_city):
+                    continue
+                target_flights.append(flight)
+            
+            if not target_flights:
+                return "No flights found matching the criteria. Please check if the departure and destination cities are correct."
+            
+            flights_repr = "\n".join([str(flight) for flight in target_flights])
+            return flights_repr
+        except Exception as e:
+            return f"Error searching flights: {e}"
 
     @is_tool(tool_type=ToolType.READ)
     def train_ticket_search(self, departure: str, destination: str, date: str) -> str:
@@ -299,18 +336,23 @@ class OTATools(ToolKitBase):
 
     @is_tool(tool_type=ToolType.WRITE)
     def create_hotel_order(self, hotel_id: str, room_id: str, user_id: str) -> str:
-
         assert hotel_id, "Hotel ID cannot be empty"
+        assert room_id, "Room ID cannot be empty"
         assert user_id, "User ID cannot be empty"
         assert self._check_user(user_id), "User ID does not match"
 
-        hotel = self._get_hotel(hotel_id)
+        try:
+            hotel = self._get_hotel(hotel_id)
+        except ValueError as e:
+            return f"Error: {e}"
 
         ordered_rooms = []
+        room_found = False
         for product in hotel.products:
             if product.product_id == room_id:
+                room_found = True
                 if product.quantity <= 0:
-                   return f"No available rooms at the moment"
+                    return f"No available rooms at the moment for room {room_id}"
                 product.quantity = product.quantity - 1
                 ordered_room = HotelProduct(
                     product_id=product.product_id,
@@ -321,6 +363,9 @@ class OTATools(ToolKitBase):
                 )
                 ordered_rooms.append(ordered_room)
                 break
+        
+        if not room_found:
+            return f"Room {room_id} not found in hotel {hotel_id}"
 
         order = Order(
             order_id=self.db.assign_order_id("hotel", user_id, hotel_id=hotel_id, product_id=room_id),
@@ -335,28 +380,38 @@ class OTATools(ToolKitBase):
         )
 
         response = self._add_ota_order(order)
-        return repr(order) if response == "done" else response
+        if response == "done":
+            return repr(order)
+        else:
+            return f"Failed to create order: {response}"
 
     @is_tool(tool_type=ToolType.WRITE)
     def create_attraction_order(self, attraction_id: str, ticket_id: str, user_id: str, date: str, quantity: int) -> str:
-
         assert attraction_id, "Attraction ID cannot be empty"
         assert ticket_id, "Ticket ID cannot be empty"
         assert user_id, "User ID cannot be empty"
+        assert date, "Date cannot be empty"
+        assert isinstance(quantity, int), "Quantity must be an integer"
         assert quantity > 0, "Booking quantity must be greater than 0"
+        assert check_date_format(date), "Date format is incorrect, correct format is %Y-%m-%d"
         assert self._check_user(user_id), "User ID does not match"
 
-        attraction = self._get_attraction(attraction_id)
+        try:
+            attraction = self._get_attraction(attraction_id)
+        except ValueError as e:
+            return f"Error: {e}"
 
         target_product = None
         for product in attraction.products:
             if product.date == date and product.product_id == ticket_id:
                 target_product = product
                 break
+        
         if target_product is None:
-            return "The attraction does not have the specified ticket on the specified date"
+            return f"The attraction {attraction_id} does not have ticket {ticket_id} on date {date}"
+        
         if target_product.quantity < quantity:
-            return "Insufficient ticket inventory for the specified date"
+            return f"Insufficient ticket inventory for the specified date {date}. Available: {target_product.quantity}, Requested: {quantity}"
 
         ordered_tickets = []
         target_product.quantity = target_product.quantity - quantity
@@ -382,26 +437,38 @@ class OTATools(ToolKitBase):
         )
 
         response = self._add_ota_order(order)
-        return repr(order) if response == "done" else response
+        if response == "done":
+            return repr(order)
+        else:
+            return f"Failed to create order: {response}"
 
     @is_tool(tool_type=ToolType.WRITE)
     def create_flight_order(self, flight_id: str, seat_id: str, user_id: str, date: str, quantity: int) -> str:
-
         assert flight_id, "Flight ID cannot be empty"
         assert seat_id, "Seat ID cannot be empty"
         assert user_id, "User ID cannot be empty"
+        assert date, "Date cannot be empty"
+        assert isinstance(quantity, int), "Quantity must be an integer"
         assert quantity > 0, "Booking quantity must be greater than 0"
+        assert check_date_format(date), "Date format is incorrect, correct format is %Y-%m-%d"
         assert self._check_user(user_id), "User ID does not match"
 
+        try:
+            flight = self._get_flight(flight_id)
+        except ValueError as e:
+            return f"Error: {e}"
+
         target_product = None
-        for product in self._get_flight(flight_id).products:
+        for product in flight.products:
             if product.date == date and product.product_id == seat_id:
                 target_product = product
                 break
+        
         if target_product is None:
-            return "The flight does not have the specified seat on the specified date"
+            return f"The flight {flight_id} does not have seat {seat_id} on date {date}"
+        
         if target_product.quantity < quantity:
-            return "Insufficient seat inventory for the specified date"
+            return f"Insufficient seat inventory for the specified date {date}. Available: {target_product.quantity}, Requested: {quantity}"
 
         ordered_seats = []
         target_product.quantity = target_product.quantity - quantity
@@ -427,26 +494,38 @@ class OTATools(ToolKitBase):
         )
 
         response = self._add_ota_order(order)
-        return repr(order) if response == "done" else response
+        if response == "done":
+            return repr(order)
+        else:
+            return f"Failed to create order: {response}"
 
     @is_tool(tool_type=ToolType.WRITE)
     def create_train_order(self, train_id: str, seat_id: str, user_id: str, date: str, quantity: int) -> str:
-
         assert train_id, "Train ID cannot be empty"
         assert seat_id, "Seat ID cannot be empty"
         assert user_id, "User ID cannot be empty"
+        assert date, "Date cannot be empty"
+        assert isinstance(quantity, int), "Quantity must be an integer"
         assert quantity > 0, "Booking quantity must be greater than 0"
+        assert check_date_format(date), "Date format is incorrect, correct format is %Y-%m-%d"
         assert self._check_user(user_id), "User ID does not match"
 
+        try:
+            train = self._get_train(train_id)
+        except ValueError as e:
+            return f"Error: {e}"
+
         target_product = None
-        for product in self._get_train(train_id).products:
+        for product in train.products:
             if product.date == date and product.product_id == seat_id:
                 target_product = product
                 break
+        
         if target_product is None:
-            return "The train does not have the specified seat on the specified date"
+            return f"The train {train_id} does not have seat {seat_id} on date {date}"
+        
         if target_product.quantity < quantity:
-            return "Insufficient seat inventory for the specified date"
+            return f"Insufficient seat inventory for the specified date {date}. Available: {target_product.quantity}, Requested: {quantity}"
 
         ordered_seats = []
         target_product.quantity = target_product.quantity - quantity
@@ -472,133 +551,183 @@ class OTATools(ToolKitBase):
         )
 
         response = self._add_ota_order(order)
-        return repr(order) if response == "done" else response
+        if response == "done":
+            return repr(order)
+        else:
+            return f"Failed to create order: {response}"
 
     @is_tool(tool_type=ToolType.WRITE)
     def pay_hotel_order(self, order_id: str) -> str:
-
         assert order_id, "Order ID cannot be empty"
-
-        order = self._get_ota_order(order_id)
+        
+        try:
+            order = self._get_ota_order(order_id)
+        except ValueError as e:
+            return f"Error: {e}"
+        
+        if order.order_type != "hotel":
+            return f"Order {order_id} is not a hotel order"
+        
         if order.status != "unpaid":
-            return "Order status must be unpaid"
+            return f"Order status must be unpaid. Current status: {order.status}"
 
         order.status = "paid"
         order.update_time = self.get_now("%Y-%m-%d %H:%M:%S")
         response = self._modify_ota_order(order)
-        return "Payment successful" if response == "done" else response
+        if response == "done":
+            return "Payment successful"
+        else:
+            return f"Payment failed: {response}"
 
     @is_tool(tool_type=ToolType.WRITE)
     def pay_attraction_order(self, order_id: str) -> str:
-
         assert order_id, "Order ID cannot be empty"
-
-        order = self._get_ota_order(order_id)
+        
+        try:
+            order = self._get_ota_order(order_id)
+        except ValueError as e:
+            return f"Error: {e}"
+        
+        if order.order_type != "attraction":
+            return f"Order {order_id} is not an attraction order"
+        
         if order.status != "unpaid":
-            return "Order status must be unpaid"
+            return f"Order status must be unpaid. Current status: {order.status}"
 
         order.status = "paid"
         order.update_time = self.get_now("%Y-%m-%d %H:%M:%S")
         response = self._modify_ota_order(order)
-        return "Payment successful" if response == "done" else response
+        if response == "done":
+            return "Payment successful"
+        else:
+            return f"Payment failed: {response}"
 
     @is_tool(tool_type=ToolType.WRITE)
     def pay_flight_order(self, order_id: str) -> str:
-
         assert order_id, "Order ID cannot be empty"
-
-        order = self._get_ota_order(order_id)
+        
+        try:
+            order = self._get_ota_order(order_id)
+        except ValueError as e:
+            return f"Error: {e}"
+        
+        if order.order_type != "flight":
+            return f"Order {order_id} is not a flight order"
+        
         if order.status != "unpaid":
-            return "Order status must be unpaid"
+            return f"Order status must be unpaid. Current status: {order.status}"
 
         order.status = "paid"
         order.update_time = self.get_now("%Y-%m-%d %H:%M:%S")
         response = self._modify_ota_order(order)
-        return "Payment successful" if response == "done" else response
+        if response == "done":
+            return "Payment successful"
+        else:
+            return f"Payment failed: {response}"
 
     @is_tool(tool_type=ToolType.WRITE)
     def pay_train_order(self, order_id: str) -> str:
-
         assert order_id, "Order ID cannot be empty"
-
-        order = self._get_ota_order(order_id)
+        
+        try:
+            order = self._get_ota_order(order_id)
+        except ValueError as e:
+            return f"Error: {e}"
+        
+        if order.order_type != "train":
+            return f"Order {order_id} is not a train order"
+        
         if order.status != "unpaid":
-            return "Order status must be unpaid"
+            return f"Order status must be unpaid. Current status: {order.status}"
 
         order.status = "paid"
         order.update_time = self.get_now("%Y-%m-%d %H:%M:%S")
         response = self._modify_ota_order(order)
-        return "Payment successful" if response == "done" else response
+        if response == "done":
+            return "Payment successful"
+        else:
+            return f"Payment failed: {response}"
 
     @is_tool(tool_type=ToolType.READ)
     def search_hotel_order(self, user_id: str, date: Optional[str] = None, status: Optional[OTAOrderStatus] = "paid") -> str:
-
-
         assert user_id, "User ID cannot be empty"
         assert self._check_user(user_id), "User ID does not match"
-
-        user_has_orders = any(order.user_id == user_id for order in self._get_ota_order(scene="hotel"))
-        if not user_has_orders:
-            raise ValueError("User does not exist or has no order records")
+        
         if date:
             assert check_date_format(date), "Date format is incorrect, correct format is %Y-%m-%d"
 
-        hotel_orders = []
-        for order in self._get_ota_order(scene="hotel"):
-            order_selected = None
-            if order.user_id == user_id:
-                order_selected = order
-            if status and order.status != status:
+        try:
+            hotel_orders = []
+            for order in self._get_ota_order(scene="hotel"):
                 order_selected = None
-            if date:
-                if not hasattr(order_selected, 'products'):
+                if order.user_id == user_id:
+                    order_selected = order
+                if status and order.status != status:
                     order_selected = None
-                else:
-                    has_date_product = False
-                    for product in order_selected.products:
-                        if hasattr(product, 'date') and product.date == date:
-                            has_date_product = True
-                            break
-                    if not has_date_product:
+                if date and order_selected is not None:
+                    if not hasattr(order_selected, 'products'):
                         order_selected = None
-            if order_selected:
-                hotel_orders.append(order_selected)
-        orders_repr = "\n".join([str(order) for order in hotel_orders])
-        return orders_repr
+                    else:
+                        has_date_product = False
+                        for product in order_selected.products:
+                            if hasattr(product, 'date') and product.date == date:
+                                has_date_product = True
+                                break
+                        if not has_date_product:
+                            order_selected = None
+                if order_selected:
+                    hotel_orders.append(order_selected)
+            
+            if not hotel_orders:
+                date_filter = f" on date {date}" if date else ""
+                status_filter = f" with status {status}" if status else ""
+                return f"No hotel orders found for user {user_id}{date_filter}{status_filter}"
+            
+            orders_repr = "\n".join([str(order) for order in hotel_orders])
+            return orders_repr
+        except Exception as e:
+            return f"Error searching hotel orders: {e}"
 
     @is_tool(tool_type=ToolType.READ)
     def search_attraction_order(self, user_id: str, date: Optional[str] = None,
                                 status: Optional[OTAOrderStatus] = "paid") -> str:
-
-
         assert user_id, "User ID cannot be empty"
         assert self._check_user(user_id), "User ID does not match"
 
         if date:
             assert check_date_format(date), "Date format is incorrect, correct format is %Y-%m-%d"
 
-        attraction_orders = []
-        for order in self._get_ota_order(scene="attraction"):
-            order_selected = None
-            if order.user_id == user_id:
-                order_selected = order
-            if status and order.status != status:
+        try:
+            attraction_orders = []
+            for order in self._get_ota_order(scene="attraction"):
                 order_selected = None
-            if date:
-                if not hasattr(order_selected, 'products'):
+                if order.user_id == user_id:
+                    order_selected = order
+                if status and order.status != status:
                     order_selected = None
-                else:
-                    has_date_product = False
-                    for product in order_selected.products:
-                        if hasattr(product, 'date') and product.date == date:
-                            has_date_product = True
-                            break
-                    if not has_date_product:
+                if date and order_selected is not None:
+                    if not hasattr(order_selected, 'products'):
                         order_selected = None
-            if order_selected:
-                attraction_orders.append(order_selected)
-        orders_repr = "\n".join([str(order) for order in attraction_orders])
-        return orders_repr
+                    else:
+                        has_date_product = False
+                        for product in order_selected.products:
+                            if hasattr(product, 'date') and product.date == date:
+                                has_date_product = True
+                                break
+                        if not has_date_product:
+                            order_selected = None
+                if order_selected:
+                    attraction_orders.append(order_selected)
+            
+            if not attraction_orders:
+                date_filter = f" on date {date}" if date else ""
+                status_filter = f" with status {status}" if status else ""
+                return f"No attraction orders found for user {user_id}{date_filter}{status_filter}"
+            
+            orders_repr = "\n".join([str(order) for order in attraction_orders])
+            return orders_repr
+        except Exception as e:
+            return f"Error searching attraction orders: {e}"
 
     @is_tool(tool_type=ToolType.READ)
     def search_flight_order(self, user_id: str, date: Optional[str] = None,
@@ -609,28 +738,37 @@ class OTATools(ToolKitBase):
         if date:
             assert check_date_format(date), "Date format is incorrect, correct format is %Y-%m-%d"
 
-        flight_orders = []
-        for order in self._get_ota_order(scene="flight"):
-            order_selected = None
-            if order.user_id == user_id:
-                order_selected = order
-            if status and order.status != status:
+        try:
+            flight_orders = []
+            for order in self._get_ota_order(scene="flight"):
                 order_selected = None
-            if date:
-                if not hasattr(order_selected, 'products'):
+                if order.user_id == user_id:
+                    order_selected = order
+                if status and order.status != status:
                     order_selected = None
-                else:
-                    has_date_product = False
-                    for product in order_selected.products:
-                        if hasattr(product, 'date') and product.date == date:
-                            has_date_product = True
-                            break
-                    if not has_date_product:
+                if date and order_selected is not None:
+                    if not hasattr(order_selected, 'products'):
                         order_selected = None
-            if order_selected:
-                flight_orders.append(order_selected)
-        orders_repr = "\n".join([str(order) for order in flight_orders])
-        return orders_repr
+                    else:
+                        has_date_product = False
+                        for product in order_selected.products:
+                            if hasattr(product, 'date') and product.date == date:
+                                has_date_product = True
+                                break
+                        if not has_date_product:
+                            order_selected = None
+                if order_selected:
+                    flight_orders.append(order_selected)
+            
+            if not flight_orders:
+                date_filter = f" on date {date}" if date else ""
+                status_filter = f" with status {status}" if status else ""
+                return f"No flight orders found for user {user_id}{date_filter}{status_filter}"
+            
+            orders_repr = "\n".join([str(order) for order in flight_orders])
+            return orders_repr
+        except Exception as e:
+            return f"Error searching flight orders: {e}"
 
 
     @is_tool(tool_type=ToolType.READ)
@@ -642,94 +780,141 @@ class OTATools(ToolKitBase):
         if date:
             assert check_date_format(date), "Date format is incorrect, correct format is %Y-%m-%d"
 
-        train_orders = []
-        for order in self._get_ota_order(scene="train"):
-            order_selected = None
-            if order.user_id == user_id:
-                order_selected = order
-            if status and order.status != status:
+        try:
+            train_orders = []
+            for order in self._get_ota_order(scene="train"):
                 order_selected = None
-            if date:
-                if not hasattr(order_selected, 'products'):
+                if order.user_id == user_id:
+                    order_selected = order
+                if status and order.status != status:
                     order_selected = None
-                else:
-                    has_date_product = False    
-                    for product in order_selected.products:
-                        if hasattr(product, 'date') and product.date == date:
-                            has_date_product = True
-                            break
-                    if not has_date_product:
+                if date and order_selected is not None:
+                    if not hasattr(order_selected, 'products'):
                         order_selected = None
-            if order_selected:
-                train_orders.append(order_selected)
-        orders_repr = "\n".join([str(order) for order in train_orders])
-        return orders_repr
+                    else:
+                        has_date_product = False    
+                        for product in order_selected.products:
+                            if hasattr(product, 'date') and product.date == date:
+                                has_date_product = True
+                                break
+                        if not has_date_product:
+                            order_selected = None
+                if order_selected:
+                    train_orders.append(order_selected)
+            
+            if not train_orders:
+                date_filter = f" on date {date}" if date else ""
+                status_filter = f" with status {status}" if status else ""
+                return f"No train orders found for user {user_id}{date_filter}{status_filter}"
+            
+            orders_repr = "\n".join([str(order) for order in train_orders])
+            return orders_repr
+        except Exception as e:
+            return f"Error searching train orders: {e}"
 
     @is_tool(tool_type=ToolType.READ)
     def get_hotel_order_detail(self, order_id: str) -> str:
-
         assert order_id, "Order ID cannot be empty"
-
-        order = self._get_ota_order(order_id=order_id)
-        assert order.order_type == "hotel", "Order type is not a hotel order"
+        
+        try:
+            order = self._get_ota_order(order_id=order_id)
+        except ValueError as e:
+            return f"Error: {e}"
+        
+        if order.order_type != "hotel":
+            return f"Order {order_id} is not a hotel order"
+        
         return repr(order)
 
     @is_tool(tool_type=ToolType.READ)
     def get_attraction_order_detail(self, order_id: str) -> str:
-
         assert order_id, "Order ID cannot be empty"
-
-        order = self._get_ota_order(order_id=order_id)
-        assert order.order_type == "attraction", "Order type is not an attraction order"
+        
+        try:
+            order = self._get_ota_order(order_id=order_id)
+        except ValueError as e:
+            return f"Error: {e}"
+        
+        if order.order_type != "attraction":
+            return f"Order {order_id} is not an attraction order"
+        
         return repr(order)
 
     @is_tool(tool_type=ToolType.READ)
     def get_flight_order_detail(self, order_id: str) -> str:
-
         assert order_id, "Order ID cannot be empty"
-
-        order = self._get_ota_order(order_id=order_id)
-        assert order.order_type == "flight", "Order type is not a flight order"
+        
+        try:
+            order = self._get_ota_order(order_id=order_id)
+        except ValueError as e:
+            return f"Error: {e}"
+        
+        if order.order_type != "flight":
+            return f"Order {order_id} is not a flight order"
+        
         return repr(order)
 
     @is_tool(tool_type=ToolType.READ)
     def get_train_order_detail(self, order_id: str) -> str:
-
         assert order_id, "Order ID cannot be empty"
-
-        order = self._get_ota_order(order_id=order_id)
-        assert order.order_type == "train", "Order type is not a train order"
+        
+        try:
+            order = self._get_ota_order(order_id=order_id)
+        except ValueError as e:
+            return f"Error: {e}"
+        
+        if order.order_type != "train":
+            return f"Order {order_id} is not a train order"
+        
         return repr(order)
 
     @is_tool(tool_type=ToolType.WRITE)
     def modify_train_order(self, order_id: str, user_id: str, new_date: str) -> str:
-
         assert order_id, "Order ID cannot be empty"
         assert user_id, "User ID cannot be empty"
         assert new_date, "New departure date cannot be empty"
         assert self._check_user(user_id), "User ID does not match"
         assert check_date_format(new_date), "Date format is incorrect, correct format is %Y-%m-%d"
-        assert self._get_ota_order(order_id=order_id), "Order does not exist"
 
-        order = self._get_ota_order(order_id=order_id)
-        assert order.order_type == "train", "Order type is not a train order"
-        assert order.user_id == user_id, f"Order {order_id} does not belong to user {user_id}"
-        assert order.status == "paid", f"Only paid orders can be modified, current status: {order.status}"
+        try:
+            order = self._get_ota_order(order_id=order_id)
+        except ValueError as e:
+            return f"Error: {e}"
 
-        assert len(order.products) == 1, "Only single train ticket order modification is supported"
+        if order.order_type != "train":
+            return f"Order {order_id} is not a train order"
+        
+        if order.user_id != user_id:
+            return f"Order {order_id} does not belong to user {user_id}"
+        
+        if order.status != "paid":
+            return f"Only paid orders can be modified. Current status: {order.status}"
+
+        if len(order.products) != 1:
+            return "Only single train ticket order modification is supported"
+
         old_product = order.products[0]
         train_id = order.store_id
+        
+        try:
+            train = self._get_train(train_id)
+        except ValueError as e:
+            return f"Error: {e}"
+        
         seat_type = old_product.get("seat_type") if isinstance(old_product, dict) else old_product.seat_type
         quantity = old_product.get("quantity") if isinstance(old_product, dict) else old_product.quantity
 
-        train = self.db.trains[train_id]
         new_product = None
         for product in train.products:
             if product.date == new_date and product.seat_type == seat_type:
                 new_product = product
                 break
-        assert new_product is not None, f"New date {new_date} does not have {seat_type} type seats"
-        assert new_product.quantity >= quantity, f"Insufficient {seat_type} seat inventory for new date {new_date}"
+        
+        if new_product is None:
+            return f"New date {new_date} does not have {seat_type} type seats"
+        
+        if new_product.quantity < quantity:
+            return f"Insufficient {seat_type} seat inventory for new date {new_date}. Available: {new_product.quantity}, Required: {quantity}"
 
         for product in train.products:
             old_date = old_product.get("date") if isinstance(old_product, dict) else old_product.date
@@ -759,40 +944,59 @@ class OTATools(ToolKitBase):
         response = self._modify_ota_order(order)
         if response == "done":
             if diff > 0:
-                return f"Modification successful, need to pay additional amount: {diff}, please pay as soon as possible"
+                return f"Modification successful, need to pay additional amount: {diff}."
             else:
-                return f"Modification successful, price difference: {diff}, refunded"
+                return f"Modification successful, price difference: {diff}, refunded."
         else:
-            return f"Modification failed, {response}"
+            return f"Modification failed: {response}"
 
     @is_tool(tool_type=ToolType.WRITE)
     def modify_flight_order(self, order_id: str, user_id: str, new_date: str) -> str:
-
         assert order_id, "Order ID cannot be empty"
         assert user_id, "User ID cannot be empty"
         assert new_date, "New departure date cannot be empty"
         assert check_date_format(new_date), "Date format is incorrect, correct format is %Y-%m-%d"
         assert self._check_user(user_id), "User ID does not match"
 
-        order = self._get_ota_order(order_id=order_id)
-        assert order.order_type == "flight", "Order type is not a flight order"
-        assert order.user_id == user_id, f"User {user_id} does not have permission to modify this order"
-        assert order.status == "paid", "Only paid orders can be modified"
+        try:
+            order = self._get_ota_order(order_id=order_id)
+        except ValueError as e:
+            return f"Error: {e}"
 
-        assert len(order.products) == 1, "Only single flight ticket order modification is supported"
+        if order.order_type != "flight":
+            return f"Order {order_id} is not a flight order"
+        
+        if order.user_id != user_id:
+            return f"Order {order_id} does not belong to user {user_id}"
+        
+        if order.status != "paid":
+            return f"Only paid orders can be modified. Current status: {order.status}"
+
+        if len(order.products) != 1:
+            return "Only single flight ticket order modification is supported"
+
         old_product = order.products[0]
         flight_id = order.store_id
+        
+        try:
+            flight = self._get_flight(flight_id)
+        except ValueError as e:
+            return f"Error: {e}"
+        
         seat_type = old_product.get("seat_type") if isinstance(old_product, dict) else old_product.seat_type
         quantity = old_product.get("quantity") if isinstance(old_product, dict) else old_product.quantity
 
-        flight = self.db.flights[flight_id]
         new_product = None
         for product in flight.products:
             if product.date == new_date and product.seat_type == seat_type:
                 new_product = product
                 break
-        assert new_product is not None, f"New date {new_date} does not have {seat_type} type seats"
-        assert new_product.quantity >= quantity, f"Insufficient {seat_type} seat inventory for new date {new_date}"
+        
+        if new_product is None:
+            return f"New date {new_date} does not have {seat_type} type seats"
+        
+        if new_product.quantity < quantity:
+            return f"Insufficient {seat_type} seat inventory for new date {new_date}. Available: {new_product.quantity}, Required: {quantity}"
 
         for product in flight.products:
             old_date = old_product.get("date") if isinstance(old_product, dict) else old_product.date
@@ -826,88 +1030,132 @@ class OTATools(ToolKitBase):
             else:
                 return f"Modification successful, price difference: {diff}, refunded"
         else:
-            return f"Modification failed, {response}"
+            return f"Modification failed: {response}"
 
     @is_tool(tool_type=ToolType.WRITE)
     def cancel_hotel_order(self, order_id: str, user_id: str) -> str:
-
         assert order_id, "Order ID cannot be empty"
         assert user_id, "User ID cannot be empty"
         assert self._check_user(user_id), "User ID does not match"
 
-        order = self._get_ota_order(order_id=order_id)
-        assert order.order_type == "hotel", "Order type is not a hotel order"
-        assert order.status not in ["cancelled"], "Order is already in cancelled status"
+        try:
+            order = self._get_ota_order(order_id=order_id)
+        except ValueError as e:
+            return f"Error: {e}"
+        
+        if order.order_type != "hotel":
+            return f"Order {order_id} is not a hotel order"
+        
+        if order.user_id != user_id:
+            return f"Order {order_id} does not belong to user {user_id}"
+        
+        if order.status in ["cancelled"]:
+            return f"Order {order_id} is already cancelled"
+        
         refund = 0
         if order.status == "paid":
             refund = order.total_price
+        
         order.status = "cancelled"
         order.update_time = self.get_now("%Y-%m-%d %H:%M:%S")
         response = self._modify_ota_order(order)
         if response == "done":
             return f"Cancellation successful, refund amount: {refund}"
         else:
-            return f"Cancellation failed, {response}"
+            return f"Cancellation failed: {response}"
 
     @is_tool(tool_type=ToolType.WRITE)
-    def cancel_attraction_order(self, order_id: str, user_id: str) -> float:
-
+    def cancel_attraction_order(self, order_id: str, user_id: str) -> str:
         assert order_id, "Order ID cannot be empty"
         assert user_id, "User ID cannot be empty"
         assert self._check_user(user_id), "User ID does not match"
 
-        order = self._get_ota_order(order_id=order_id)
-        assert order.order_type == "attraction", "Order type is not an attraction order"
-        assert order.status not in ["cancelled"], "Order is already in cancelled status"
+        try:
+            order = self._get_ota_order(order_id=order_id)
+        except ValueError as e:
+            return f"Error: {e}"
+        
+        if order.order_type != "attraction":
+            return f"Order {order_id} is not an attraction order"
+        
+        if order.user_id != user_id:
+            return f"Order {order_id} does not belong to user {user_id}"
+        
+        if order.status in ["cancelled"]:
+            return f"Order {order_id} is already cancelled"
+        
         refund = 0
         if order.status == "paid":
             refund = order.total_price
+        
         order.status = "cancelled"
         order.update_time = self.get_now("%Y-%m-%d %H:%M:%S")
         response = self._modify_ota_order(order)
         if response == "done":
             return f"Cancellation successful, refund amount: {refund}"
         else:
-            return f"Cancellation failed, {response}"
+            return f"Cancellation failed: {response}"
 
     @is_tool(tool_type=ToolType.WRITE)
     def cancel_flight_order(self, order_id: str, user_id: str) -> str:
-
         assert order_id, "Order ID cannot be empty"
         assert user_id, "User ID cannot be empty"
         assert self._check_user(user_id), "User ID does not match"
 
-        order = self._get_ota_order(order_id=order_id)
-        assert order.order_type == "flight", "Order type is not a flight order"
-        assert order.status not in ["cancelled"], "Order is already in cancelled status"
+        try:
+            order = self._get_ota_order(order_id=order_id)
+        except ValueError as e:
+            return f"Error: {e}"
+        
+        if order.order_type != "flight":
+            return f"Order {order_id} is not a flight order"
+        
+        if order.user_id != user_id:
+            return f"Order {order_id} does not belong to user {user_id}"
+        
+        if order.status in ["cancelled"]:
+            return f"Order {order_id} is already cancelled"
+        
         refund = 0
         if order.status == "paid":
             refund = order.total_price
+        
         order.status = "cancelled"
         order.update_time = self.get_now("%Y-%m-%d %H:%M:%S")
         response = self._modify_ota_order(order)
         if response == "done":
             return f"Cancellation successful, refund amount: {refund}"
         else:
-            return f"Cancellation failed, {response}"
+            return f"Cancellation failed: {response}"
 
     @is_tool(tool_type=ToolType.WRITE)
     def cancel_train_order(self, order_id: str, user_id: str) -> str:
-
         assert order_id, "Order ID cannot be empty"
         assert user_id, "User ID cannot be empty"
         assert self._check_user(user_id), "User ID does not match"
 
-        order = self._get_ota_order(order_id=order_id)
-        assert order.order_type == "train", "Order type is not a train order"
-        assert order.status not in ["cancelled"], "Order is already in cancelled status"
+        try:
+            order = self._get_ota_order(order_id=order_id)
+        except ValueError as e:
+            return f"Error: {e}"
+        
+        if order.order_type != "train":
+            return f"Order {order_id} is not a train order"
+        
+        if order.user_id != user_id:
+            return f"Order {order_id} does not belong to user {user_id}"
+        
+        if order.status in ["cancelled"]:
+            return f"Order {order_id} is already cancelled"
+        
         refund = 0
         if order.status == "paid":
             refund = order.total_price
+        
         order.status = "cancelled"
         order.update_time = self.get_now("%Y-%m-%d %H:%M:%S")
         response = self._modify_ota_order(order)
         if response == "done":
             return f"Cancellation successful, refund amount: {refund}"
         else:
-            return f"Cancellation failed, {response}"
+            return f"Cancellation failed: {response}"

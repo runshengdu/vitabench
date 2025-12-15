@@ -284,7 +284,7 @@ class ConsoleDisplay:
                     content.append("📈 Pass^k Metrics:", style="bold cyan")
                     for k, pass_hat_k in eval_metrics["pass_hat_ks"].items():
                         content.append(f"\n  k={k}: ", style="bold white")
-                        content.append(f"{pass_hat_k:.3f}", style="white")
+                        content.append(f"{pass_hat_k:.4f}", style="white")
                     content.append("\n")
                 
                 # Display pass@n and average@n metrics for each evaluation type
@@ -292,14 +292,14 @@ class ConsoleDisplay:
                     content.append("📈 Pass@N Metrics:", style="bold cyan")
                     for n, pass_at_n_value in eval_metrics["pass_at_n"].items():
                         content.append(f"\n  N={n}: ", style="bold white")
-                        content.append(f"{pass_at_n_value:.3f}", style="white")
+                        content.append(f"{pass_at_n_value:.4f}", style="white")
                     content.append("\n")
                 
                 if "average_at_n" in eval_metrics:
                     content.append("📈 Average@N Metrics:", style="bold cyan")
                     for n, average_at_n_value in eval_metrics["average_at_n"].items():
                         content.append(f"\n  N={n}: ", style="bold white")
-                        content.append(f"{average_at_n_value:.3f}", style="white")
+                        content.append(f"{average_at_n_value:.4f}", style="white")
                     content.append("\n")
                 
                 content.append("\n")
@@ -322,20 +322,20 @@ class ConsoleDisplay:
             content.append("\n📈 Pass^k Metrics:", style="bold cyan")
             for k, pass_hat_k in metrics.pass_hat_ks.items():
                 content.append(f"\nk={k}: ", style="bold white")
-                content.append(f"{pass_hat_k:.3f}", style="white")
+                content.append(f"{pass_hat_k:.4f}", style="white")
             
             # Display pass@n and average@n metrics after Pass^k Metrics
             if metrics.pass_at_n:
                 content.append("\n\n📈 Pass@N Metrics:", style="bold cyan")
                 for n, pass_at_n_value in metrics.pass_at_n.items():
                     content.append(f"\nN={n}: ", style="bold white")
-                    content.append(f"{pass_at_n_value:.3f}", style="white")
+                    content.append(f"{pass_at_n_value:.4f}", style="white")
             
             if metrics.average_at_n:
                 content.append("\n\n📈 Average@N Metrics:", style="bold cyan")
                 for n, average_at_n_value in metrics.average_at_n.items():
                     content.append(f"\nN={n}: ", style="bold white")
-                    content.append(f"{average_at_n_value:.3f}", style="white")
+                    content.append(f"{average_at_n_value:.4f}", style="white")
 
             content.append("\n\n💰 Average Cost per Conversation: ", style="bold cyan")
             content.append(f"${metrics.avg_agent_cost:.4f}\n", style="white")

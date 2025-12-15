@@ -349,7 +349,7 @@ def display_metrics(metrics: AgentMetrics) -> None:
     print(f"🏆 Average reward: {metrics.avg_reward}")
     print("📈 Pass^k")
     for k, pass_hat_k in metrics.pass_hat_ks.items():
-        print(f"  k={k}: {pass_hat_k}")
+        print(f"  k={k}: {pass_hat_k:.4f}")
     
     # Display pass@k and average@k metrics
     if metrics.pass_at_n:

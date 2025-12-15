@@ -120,36 +120,48 @@ def format_messages(messages: list[Message]) -> list[dict]:
 
 def to_claude_think_official(messages_formatted: list[dict], messages: list[Message]) -> list[dict]:
     try:
-        idx = -2 if messages_formatted[-1]["role"] == "tool" else -1
-        content = [
-            {
-                "type": "text",
-                "text": messages[idx].content
-            }
-        ]
-        if messages[idx].raw_data["message"].get("tool_calls", []):
-            content.append(
-                {
-                    "type": "tool_use",
-                    "id": messages[idx].raw_data["message"]["tool_calls"][0]['id'],
-                    "name": messages[idx].raw_data["message"]["tool_calls"][0]["function"]["name"],
-                    "input": messages[idx].raw_data["message"]["tool_calls"][0]["function"]["arguments"]
-                }
-            )
-        reasoning_content = messages[idx].raw_data["message"].get("reasoning_content", None) or messages[idx].raw_data["message"].get("reasoning", None)
-        if reasoning_content:
-            content.append(
-                {
-                    "type": "thinking",
-                    "thinking": reasoning_content
-                }
-            )
+        for i, (formatted_msg, original_msg) in enumerate(zip(messages_formatted, messages)):
+            if formatted_msg.get("role") != "assistant":
+                continue
 
-        messages_formatted[idx]["content"] = content
+            if not hasattr(original_msg, 'raw_data') or original_msg.raw_data is None:
+                continue
+
+            raw_message = original_msg.raw_data.get("message", {})
+
+            # Extract reasoning content and signature
+            reasoning_content = raw_message.get("reasoning_content") or raw_message.get("reasoning")
+            signature = raw_message.get("signature")
+            if reasoning_content:
+                messages_formatted[i]["reasoning_content"] = reasoning_content
+            if signature:
+                messages_formatted[i]["signature"] = signature
+
     except Exception as e:
         import traceback
         traceback.print_exc()
-        print(e)
+
+    return messages_formatted
+
+
+def to_deepseek_think_official(messages_formatted: list[dict], messages: list[Message]) -> list[dict]:
+    try:
+        for i, (formatted_msg, original_msg) in enumerate(zip(messages_formatted, messages)):
+            if formatted_msg.get("role") != "assistant":
+                continue
+
+            if not hasattr(original_msg, 'raw_data') or original_msg.raw_data is None:
+                continue
+
+            reasoning_content = original_msg.raw_data.get("message", {}).get("reasoning_content", None) or \
+                               original_msg.raw_data.get("message", {}).get("reasoning", None)
+
+            if reasoning_content:
+                messages_formatted[i]["reasoning_content"] = reasoning_content
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
 
     return messages_formatted
 
@@ -160,6 +172,9 @@ def kwargs_adapter(data: dict, enable_think: False, messages: list) -> dict:
             data["thinking"] = {"type": "disabled"}
         else:
             data["messages"] = to_claude_think_official(data["messages"], messages)
+    elif "deepseek" in data["model"]:
+        if enable_think:
+            data["messages"] = to_deepseek_think_official(data["messages"], messages)
     else:
         if not enable_think:
             if data.get("model", "") == "gpt-5":
@@ -241,8 +256,9 @@ def generate(
         cost = get_response_cost(usage, model)
         try:
             response = response['choices'][0]
-        except:
-            print(f"bad response: {response}")
+        except (KeyError, IndexError, TypeError) as e:
+            logger.error(f"Full response: {json.dumps(response, ensure_ascii=False, indent=2) if isinstance(response, dict) else response}")
+            raise ValueError(f"Invalid API response format: {e}") from e
         assert response['message']['role'] == "assistant", (
             "The response should be an assistant message"
         )

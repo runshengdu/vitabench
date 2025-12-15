@@ -4,7 +4,7 @@ from pathlib import Path
 
 _models_yaml_path = Path(__file__).parent / "models.yaml"
 if os.environ.get("VITA_MODEL_CONFIG_PATH", None):
-    _models_yaml_path = os.environ.get("VITA_MODEL_CONFIG_PATH")
+    _models_yaml_path = Path(os.environ.get("VITA_MODEL_CONFIG_PATH"))
 
 if not os.path.exists(str(_models_yaml_path)):
     raise FileNotFoundError(

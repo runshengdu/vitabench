@@ -53,7 +53,7 @@ TOOL_DESCRIPTIONS_ZH = {
         "tool_type": "READ"
     },
     
-    "hotel_search_recommand": {
+    "hotel_search_recommend": {
         "description": "酒旅场景下，基于用户的地点需求和偏好，推荐合适的酒店选项，提供酒店的基础信息，包含酒店id、名称、评分、星级、地址、标签",
         "preconditions": "用户请求预定酒店，给出了酒店相关的关键词或地点",
         "postconditions": "返回符合条件的酒店列表，如需查看酒店详情（房间列表、价格等）需要使用酒店详情查询工具，引导用户选择酒店",
@@ -421,7 +421,7 @@ TOOL_DESCRIPTIONS_EN = {
         "tool_type": "READ"
     },
     
-    "hotel_search_recommand": {
+    "hotel_search_recommend": {
         "description": "In hotel query and booking scenario, recommend suitable hotel options based on user location needs and preferences, provide basic hotel information including hotel id, name, rating, star level, address, and tags",
         "preconditions": "User requests hotel booking, provides hotel-related keywords or location",
         "postconditions": "Return list of hotels meeting criteria, if hotel details (room list, prices, etc.) are needed, use hotel detail query tool, guide user to select hotel",

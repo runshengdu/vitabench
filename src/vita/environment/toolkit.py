@@ -284,6 +284,7 @@ class ToolKitBase(metaclass=ToolKitType):
                                  "%Y-%m-%d"), f"Invalid date_start format. Expected yyyy-mm-dd, got: {date_start}"
         assert check_time_format(date_end, "%Y-%m-%d"), f"Invalid date_end format. Expected yyyy-mm-dd, got: {date_end}"
 
+        assert address and address.strip(), "Address cannot be empty"
         weather_dict = {city_weather.city: city_weather for city_weather in self.db.weather}
         weather_dict_for_rerank = {city_weather.city: city_weather.city for city_weather in self.db.weather}
         weather_info = rerank(address, weather_dict_for_rerank, True)[0]
@@ -310,6 +311,7 @@ class ToolKitBase(metaclass=ToolKitType):
 
     @is_tool(ToolType.GENERIC)
     def address_to_longitude_latitude(self, address: str) -> tuple[float, float]:
+        assert address and address.strip(), "Address cannot be empty"
         address_lng_lat_dict = Location.get_all()
         address_lng_lat_dict_for_rerank = {address: address for address in address_lng_lat_dict.keys()}
         address_info = rerank(address, address_lng_lat_dict_for_rerank, True)[0]
@@ -416,6 +418,7 @@ class ToolKitBase(metaclass=ToolKitType):
         if year not in holiday_data:
             return f"Holiday data for year {year} not found"
 
+        assert holiday_name and holiday_name.strip(), "Holiday name cannot be empty"
         year_holidays = holiday_data[year]
         holiday_names = list(year_holidays.keys())
         matched_holidays = process.extract(holiday_name, holiday_names, limit=None, scorer=fuzz.partial_ratio)

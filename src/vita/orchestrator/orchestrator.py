@@ -331,6 +331,9 @@ class Orchestrator:
             for tool_call in self.message.tool_calls:
                 tool_msg = self.environment.get_response(tool_call)
                 tool_msgs.append(tool_msg)
+                # Increment error count if tool call failed
+                if tool_msg.error:
+                    self.num_errors += 1
             assert len(self.message.tool_calls) == len(tool_msgs), (
                 "Number of tool calls and tool messages should be the same"
             )
@@ -411,7 +414,7 @@ class Orchestrator:
                     num_expected_tool_messages = len(msg.tool_calls)
                     requestor = msg.role
                 else:
-                    num_expected_tool_messages == 0
+                    num_expected_tool_messages = 0
                     requestor = None
             elif isinstance(msg, ToolMessage):
                 if num_expected_tool_messages == 0 or requestor is None:

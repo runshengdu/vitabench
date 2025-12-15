@@ -9,6 +9,7 @@
 
 ## 🔔 News
 
+- [2026-01] An updated version of our benchmark is released with rectified datasets and tools, upgraded evaluation models, and updated metrics for proprietary and open language models based on the new evaluator.
 - [2025-11] The English version of the VitaBench dataset is now released! It includes fully translated tasks and databases, enabling broader international use. Try it out!
 - [2025-10] Our paper is released on arXiv: [VitaBench: Benchmarking LLM Agents with Versatile Interactive Tasks in Real-world Applications](https://arxiv.org/abs/2509.26490)
 - [2025-10] The VitaBench suite is released, including the **codebase, dataset and evaluation pipeline**! If you have any questions, feel free to raise issues and/or submit pull requests for new features of bug fixes.
@@ -32,9 +33,9 @@ Statistics of databases and environments:
 |                                | Cross-Scenarios<br>(All domains) | Delivery | In-store |  OTA  |
 | :----------------------------- | :-------------: | :------: | :------: | :---: |
 | **Databases**                  |                 |          |          |       |
-| &nbsp;&nbsp; Service Providers |      1,324      |   410    |   611    | 1,437 |
-| &nbsp;&nbsp; Products          |      6,946      |   788    |  3,277   | 9,693 |
-| &nbsp;&nbsp; Transactions      |       447       |    48    |    28    |  154  |
+| &nbsp;&nbsp; Service Providers |      1,324      |   409    |   611    | 1,437 |
+| &nbsp;&nbsp; Products          |      6,942      |   784    |  3,277   | 9,693 |
+| &nbsp;&nbsp; Transactions      |       334       |    48    |    36    |  154  |
 | **API Tools**                  |                 |          |          |       |
 | &nbsp;&nbsp; Write             |       27        |    4     |    9     |  14   |
 | &nbsp;&nbsp; Read              |       33        |    10    |    10    |  19   |
