@@ -158,13 +158,26 @@ def edit_distance_score(s1: str, s2: str):
 
 
 def rerank(keywords: str, docs: Dict[str, str], with_score: bool = False):
-    candidates = [doc for doc in docs.values()]
-    doc_dict_reverse = {val: key for key, val in docs.items()}
+    # Ensure there are no duplicate values in docs
+    robust_docs = {}
+    val_set = set()
+    for key, val in docs.items():
+        while val in val_set:
+            # Add a dummy suffix to the value
+            val += "-"
+
+        val_set.add(val)
+        robust_docs[key] = val
+
+    candidates = [doc for doc in robust_docs.values()]
+    doc_dict_reverse = {val: key for key, val in robust_docs.items()}
+
     docs_sorted = process.extract(keywords, candidates, limit=None, scorer=fuzz.partial_ratio)
     if with_score:
         id_doc_sorted = [(doc_dict_reverse[doc], doc, score) for doc, score in docs_sorted]
     else:
         id_doc_sorted = [(doc_dict_reverse[doc], doc) for doc, _ in docs_sorted]
+
     return id_doc_sorted
 
 
