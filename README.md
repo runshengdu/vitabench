@@ -9,8 +9,9 @@
 
 ## 🔔 News
 
-- [2026-01] An updated version of our benchmark is released with rectified datasets and tools, upgraded evaluation models, and updated metrics for proprietary and open language models based on the new evaluator.
-- [2025-11] The English version of the VitaBench dataset is now released! It includes fully translated tasks and databases, enabling broader international use. Try it out!
+- [2026-01] VitaBench has been accepted to **[ICLR 2026](https://openreview.net/forum?id=rtcX9qOBaz)**! 🎉
+- [2026-01] An **updated version** of VitaBench is released with rectified datasets and tools, upgraded evaluation models, and updated metrics for proprietary and open language models based on the new evaluator.
+- [2025-11] The **English version** of the VitaBench dataset is now released! It includes fully translated tasks and databases, enabling broader international use. Try it out!
 - [2025-10] Our paper is released on arXiv: [VitaBench: Benchmarking LLM Agents with Versatile Interactive Tasks in Real-world Applications](https://arxiv.org/abs/2509.26490)
 - [2025-10] The VitaBench suite is released, including the **codebase, dataset and evaluation pipeline**! If you have any questions, feel free to raise issues and/or submit pull requests for new features of bug fixes.
 
