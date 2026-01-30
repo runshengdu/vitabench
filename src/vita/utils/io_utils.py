@@ -69,7 +69,7 @@ def load_file(path: str | Path, **kwargs: Any) -> dict[str, Any]:
         with open(path, "r") as fp:
             data = json.load(fp, **kwargs)
     elif path.suffix == ".yaml" or path.suffix == ".yml":
-        with open(path, "r") as fp:
+        with open(path, "r", encoding="utf-8") as fp:
             data = yaml.load(fp, Loader=yaml.SafeLoader, **kwargs)
         # Apply environment variable substitution for YAML files
         data = _recursive_substitute(data)

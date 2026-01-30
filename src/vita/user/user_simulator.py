@@ -127,11 +127,15 @@ class UserSimulator(BaseUser):
             state.messages.append(message)
         messages = state.system_messages + state.flip_roles()
 
+        llm_args = dict(self.llm_args)
+        llm_args.pop("enable_prompt_caching", None)
+
         assistant_message = generate(
             model=self.llm,
             messages=messages,
             tools=self.tools,
-            **self.llm_args,
+            **llm_args,
+            enable_prompt_caching=True,
         )
 
         user_response = assistant_message.content
@@ -237,11 +241,15 @@ class DummyUser(BaseUser):
             state.messages.append(message)
         messages = state.system_messages + state.flip_roles()
 
+        llm_args = dict(self.llm_args)
+        llm_args.pop("enable_prompt_caching", None)
+
         assistant_message = generate(
             model=self.llm,
             messages=messages,
             tools=self.tools,
-            **self.llm_args,
+            **llm_args,
+            enable_prompt_caching=True,
         )
 
         user_response = assistant_message.content

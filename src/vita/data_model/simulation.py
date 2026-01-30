@@ -9,18 +9,19 @@ from pydantic import BaseModel, Field
 from typing_extensions import Annotated
 
 from vita.config import (
+    DEFAULT_AGENT_IMPLEMENTATION,
+    DEFAULT_EVALUATION_TYPE,
+    DEFAULT_LANGUAGE,
     DEFAULT_LLM_AGENT,
     DEFAULT_LLM_USER,
     DEFAULT_LOG_LEVEL,
     DEFAULT_MAX_CONCURRENCY,
     DEFAULT_MAX_ERRORS,
+    DEFAULT_MAX_EVALUATIONS,
     DEFAULT_MAX_STEPS,
-    DEFAULT_EVALUATION_TYPE,
     DEFAULT_NUM_TRIALS,
     DEFAULT_SAVE_TO,
     DEFAULT_SEED,
-    DEFAULT_LLM_EVALUATOR,
-    DEFAULT_LANGUAGE,
     models
 )
 from vita.data_model.message import Message
@@ -157,6 +158,13 @@ class RunConfig(BaseModel):
             default=DEFAULT_MAX_CONCURRENCY,
         ),
     ]
+    max_evaluations: Annotated[
+        int,
+        Field(
+            description="The maximum number of concurrent evaluations to run per evaluator",
+            default=DEFAULT_MAX_EVALUATIONS,
+        ),
+    ]
     seed: Annotated[
         Optional[int],
         Field(
@@ -185,32 +193,11 @@ class RunConfig(BaseModel):
             default=None,
         ),
     ]
-    enable_think: Annotated[
-        bool,
-        Field(
-            description="Whether to enable think step for the agent",
-            default=False,
-        ),
-    ]
     language: Annotated[
         str,
         Field(
             description="The language to use for prompts and tasks. Choices: chinese, english",
             default=DEFAULT_LANGUAGE,
-        ),
-    ]
-    llm_evaluator: Annotated[
-        str,
-        Field(
-            description="The LLM to use for evaluation",
-            default=DEFAULT_LLM_EVALUATOR,
-        ),
-    ]
-    llm_args_evaluator: Annotated[
-        dict,
-        Field(
-            description="The arguments to pass to the LLM for evaluation",
-            default_factory=lambda: deepcopy(models[DEFAULT_LLM_EVALUATOR]),
         ),
     ]
     re_run: Annotated[

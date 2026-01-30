@@ -44,6 +44,6 @@ def get_environment(
 
 def get_tasks(language: str = None) -> list[Task]:
     task_path = get_task_file_path("instore", language)
-    with open(task_path, "r") as fp:
+    with open(task_path, "r", encoding="utf-8") as fp:
         tasks = json.load(fp)
     return [Task.model_validate(task) for task in tasks]

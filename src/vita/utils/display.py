@@ -84,7 +84,8 @@ class ConsoleDisplay:
 
         settings_content = Panel(
             f"[white]Save To:[/] {config.save_to or 'Not specified'}\n"
-            f"[white]Max Concurrency:[/] {config.max_concurrency}",
+            f"[white]Max Concurrency:[/] {config.max_concurrency}\n"
+            f"[white]Max Evaluations:[/] {config.max_evaluations}",
             title="[bold cyan]Additional Settings",
             border_style="cyan",
         )

@@ -41,7 +41,6 @@ class LLMAgent(LocalAgent[LLMAgentState]):
         llm: Optional[str] = None,
         llm_args: Optional[dict] = None,
         time=None,
-        enable_think: bool = False,
         language: str = None
     ):
         """
@@ -51,7 +50,6 @@ class LLMAgent(LocalAgent[LLMAgentState]):
         self.llm = llm
         self.llm_args = deepcopy(llm_args) if llm_args is not None else {}
         self.time = time + " " + get_weekday(time, language)
-        self.enable_think = enable_think
 
     @property
     def system_prompt(self) -> str:
@@ -80,7 +78,6 @@ class LLMAgent(LocalAgent[LLMAgentState]):
             "Message history must contain only AssistantMessage, UserMessage, or ToolMessage to Agent."
         )
         
-        
         return LLMAgentState(
             system_messages=[SystemMessage(role="system", content=self.system_prompt)],
             messages=message_history,
@@ -99,12 +96,15 @@ class LLMAgent(LocalAgent[LLMAgentState]):
         
         messages = state.system_messages + state.messages
             
+        llm_args = dict(self.llm_args)
+        llm_args.pop("enable_prompt_caching", None)
+            
         assistant_message = generate(
             model=self.llm,
             tools=self.tools,
             messages=messages,
-            enable_think=self.enable_think,
-            **self.llm_args,
+            **llm_args,
+            enable_prompt_caching=True,
         )
         state.messages.append(assistant_message)
             
@@ -136,7 +136,6 @@ class LLMSoloAgent(LocalAgent[LLMAgentState]):
         llm: Optional[str] = None,
         llm_args: Optional[dict] = None,
         time=None,
-        enable_think: bool = False,
         language: str = None
     ):
         """
@@ -146,7 +145,6 @@ class LLMSoloAgent(LocalAgent[LLMAgentState]):
         self.llm = llm
         self.llm_args = deepcopy(llm_args) if llm_args is not None else {}
         self.time = time + " " + get_weekday(time, language)
-        self.enable_think = enable_think
 
     @property
     def system_prompt(self) -> str:
@@ -202,13 +200,16 @@ class LLMSoloAgent(LocalAgent[LLMAgentState]):
         else:
             state.messages.append(message)
         messages = state.system_messages + state.messages
+
+        llm_args = dict(self.llm_args)
+        llm_args.pop("enable_prompt_caching", None)
         assistant_message = generate(
             model=self.llm,
             tools=self.tools,
             messages=messages,
             tool_choice="auto",
-            enable_think=self.enable_think,
-            **self.llm_args,
+            **llm_args,
+            enable_prompt_caching=True,
         )
         if not assistant_message.is_tool_call() and not self.is_stop(assistant_message):
             raise ValueError("LLMSoloAgent only supports tool calls before ###STOP###.")

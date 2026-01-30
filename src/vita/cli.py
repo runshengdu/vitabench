@@ -5,6 +5,7 @@ from vita.config import (
     DEFAULT_AGENT_IMPLEMENTATION,
     DEFAULT_LOG_LEVEL,
     DEFAULT_MAX_CONCURRENCY,
+    DEFAULT_MAX_EVALUATIONS,
     DEFAULT_MAX_ERRORS,
     DEFAULT_MAX_STEPS,
     DEFAULT_NUM_TRIALS,
@@ -14,7 +15,6 @@ from vita.config import (
     DEFAULT_LANGUAGE,
     DEFAULT_LLM_AGENT,
     DEFAULT_LLM_USER,
-    DEFAULT_LLM_EVALUATOR,
     models,
 )
 from vita.data_model.simulation import RunConfig, EvaluationType
@@ -107,18 +107,6 @@ def add_run_args(parser):
         help=f"The type of evaluation to use. Choices: trajectory, trajectory_full_traj_rubric, trajectory_sliding_wo_rubric, trajectory_full_traj_wo_rubric.",
     )
     parser.add_argument(
-        "--evaluator-llm",
-        type=str,
-        default=DEFAULT_LLM_EVALUATOR,
-        help=f"The LLM to use for evaluation. Default is {DEFAULT_LLM_EVALUATOR}.",
-    )
-    parser.add_argument(
-        "--evaluator-llm-args",
-        type=dict,
-        default={},
-        help=f"The arguments to pass to the LLM for evaluation",
-    )
-    parser.add_argument(
         "--max-errors",
         type=int,
         default=DEFAULT_MAX_ERRORS,
@@ -128,7 +116,7 @@ def add_run_args(parser):
         "--save-to",
         type=str,
         required=False,
-        help="The path to save the simulation results. Will be saved to data/simulations/<save_to>.json. If not provided, will save to <domain>_<agent>_<user>_<llm_agent>_<llm_user>_<timestamp>.json. If the file already exists, it will try to resume the run.",
+        help="The path to save the simulation results. If not provided, will save to data/simulations/{llm_agent}/{domain}/{timestamp}.json. If the file already exists, it will try to resume the run.",
     )
     parser.add_argument(
         "--max-concurrency",
@@ -149,19 +137,64 @@ def add_run_args(parser):
         help=f"The log level to use for the simulation. Default is {DEFAULT_LOG_LEVEL}.",
     )
     parser.add_argument(
+        "--language",
+        type=str,
+        choices=["chinese", "english"],
+        default=DEFAULT_LANGUAGE,
+        help="The language to use for prompts and tasks. Choices: chinese, english. Default is chinese.",
+    )
+
+
+def add_evaluate_args(parser):
+    """Add evaluation arguments to a parser."""
+    parser.add_argument(
         "--re-evaluate-file",
         type=str,
-        help="Path to simulation file for re-evaluation mode. If provided, will re-evaluate the simulations from this file instead of running new ones.",
+        required=True,
+        help="Path to simulation file for re-evaluation mode.",
+    )
+    parser.add_argument(
+        "--save-to",
+        type=str,
+        required=False,
+        help="(Optional) Path to save the re-evaluation results. If not provided, will update the input file in-place.",
+    )
+    parser.add_argument(
+        "--task-set-name",
+        type=str,
+        default=None,
+        choices=get_options().task_sets,
+        help="(Optional) The task set to use when re-running tasks.",
+    )
+    parser.add_argument(
+        "--task-ids",
+        type=str,
+        nargs="+",
+        help="(Optional) Task IDs (used with --re-run).",
+    )
+    parser.add_argument(
+        "--evaluation-type",
+        type=str,
+        default=DEFAULT_EVALUATION_TYPE,
+        choices=get_args(EvaluationType),
+        help=f"The type of evaluation to use. Choices: trajectory, trajectory_full_traj_rubric, trajectory_sliding_wo_rubric, trajectory_full_traj_wo_rubric.",
     )
     parser.add_argument(
         "--csv-output",
         type=str,
-        help="Path to CSV file to append results. If provided, will append all simulation results to this CSV file after completion.",
+        help="Path to CSV file to append results.",
     )
     parser.add_argument(
-        "--enable-think",
-        action="store_true",
-        help="Enable think mode for the agent. Default is False.",
+        "--max-concurrency",
+        type=int,
+        default=DEFAULT_MAX_EVALUATIONS,
+        help=f"The maximum number of concurrent evaluations to run per evaluator. Default is {DEFAULT_MAX_EVALUATIONS}.",
+    )
+    parser.add_argument(
+        "--log-level",
+        type=str,
+        default=DEFAULT_LOG_LEVEL,
+        help=f"The log level to use. Default is {DEFAULT_LOG_LEVEL}.",
     )
     parser.add_argument(
         "--language",
@@ -173,9 +206,8 @@ def add_run_args(parser):
     parser.add_argument(
         "--re-run",
         action="store_true",
-        help="Re-run tasks specified by --task-ids. If used with --re-evaluate-file, will re-run specified tasks and then re-evaluate all tasks together.",
+        help="Re-run tasks specified by --task-ids before re-evaluating.",
     )
-    
 
 
 def main():
@@ -194,25 +226,39 @@ def main():
                 num_tasks=args.num_tasks,
                 agent=args.agent,
                 llm_agent=args.agent_llm,
-                llm_args_agent=args.agent_llm_args if args.agent_llm_args else models.get(args.agent_llm, {}),
+                llm_args_agent=args.agent_llm_args if args.agent_llm_args else models[args.agent_llm],
                 user=args.user,
                 llm_user=args.user_llm,
-                llm_args_user=args.user_llm_args if args.user_llm_args else models.get(args.user_llm, {}),
+                llm_args_user=args.user_llm_args if args.user_llm_args else models[args.user_llm],
                 num_trials=args.num_trials,
                 max_steps=args.max_steps,
                 evaluation_type=args.evaluation_type,
-                llm_evaluator=args.evaluator_llm,
-                llm_args_evaluator=args.evaluator_llm_args if args.evaluator_llm_args else models.get(args.evaluator_llm, {}),
                 max_errors=args.max_errors,
                 save_to=args.save_to,
                 max_concurrency=args.max_concurrency,
                 seed=args.seed,
                 log_level=args.log_level,
-                re_evaluate_file=getattr(args, 're_evaluate_file', None),
-                csv_output_file=getattr(args, 'csv_output', None),
-                enable_think=args.enable_think,
                 language=args.language,
-                re_run=getattr(args, 're_run', False)
+            )
+        )
+    )
+
+    # Evaluate command
+    eval_parser = subparsers.add_parser("evaluate", help="Evaluate a saved simulation file")
+    add_evaluate_args(eval_parser)
+    eval_parser.set_defaults(
+        func=lambda args: run_domain(
+            RunConfig(
+                re_evaluate_file=args.re_evaluate_file,
+                save_to=args.save_to,
+                task_set_name=args.task_set_name,
+                task_ids=args.task_ids,
+                evaluation_type=args.evaluation_type,
+                csv_output_file=getattr(args, "csv_output", None),
+                max_evaluations=args.max_concurrency,
+                log_level=args.log_level,
+                language=args.language,
+                re_run=getattr(args, "re_run", False),
             )
         )
     )

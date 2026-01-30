@@ -20,6 +20,7 @@ dist/
 .venv/
 venv/
 ENV/
+.vita
 
 # VSCode settings
 .vscode
@@ -33,7 +34,3 @@ ENV/
 # cursor
 .cursorindexingignore
 .specstory
-
-# special files
-**/simulations
-**/configs

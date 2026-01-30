@@ -2,11 +2,12 @@ import json
 import copy
 from typing import List
 
-from vita.config import DEFAULT_LLM_EVALUATOR, models
+from vita.config import models
 from vita.data_model.message import UserMessage, SystemMessage, Message
 from vita.evaluator.evaluator_base import EvaluatorBase
 from vita.data_model.simulation import NLRubricCheck, RewardInfo, NLRubricCheck
 from vita.data_model.tasks import RewardType, Task, EvaluationCriteria
+
 from vita.utils.llm_utils import generate
 from vita.utils import evaluator_extracter, get_weekday
 from vita.prompts import get_prompts
@@ -56,6 +57,9 @@ class TrajectoryEvaluator(EvaluatorBase):
                 reward_breakdown={RewardType.NL_ASSERTION: 1.0},
             )
 
+        if llm_evaluator is None or llm_args_evaluator is None:
+            raise ValueError("llm_evaluator and llm_args_evaluator must be provided")
+
         env_info = {
             "system_time": "",
             "database": []
@@ -75,7 +79,7 @@ class TrajectoryEvaluator(EvaluatorBase):
         window_evaluations = [] 
         
         for i, window in enumerate(windows):
-            print(f"Processing window {i+1}/{len(windows)} with {len(window)} messages")
+            print(f"[{llm_evaluator}][task:{task.id}] Processing window {i+1}/{len(windows)} with {len(window)} messages")
             window_start_idx = i * step
             current_rubric_states, window_eval_info = cls._evaluate_window(
                 env_info, task, window, current_rubric_states, i+1, len(windows), window_start_idx,
@@ -187,11 +191,9 @@ class TrajectoryEvaluator(EvaluatorBase):
         Returns:
             tuple: (updated_states, window_evaluation_info)
         """
-        if llm_evaluator is None:
-            llm_evaluator = DEFAULT_LLM_EVALUATOR
-        if llm_args_evaluator is None:
-            llm_args_evaluator = models[DEFAULT_LLM_EVALUATOR]
-            
+        if llm_evaluator is None or llm_args_evaluator is None:
+            raise ValueError("llm_evaluator and llm_args_evaluator must be provided")
+
         window_content = cls._format_window_content(window, window_start_idx)
 
         current_rubrics_str = cls._format_current_rubrics(current_states)
@@ -220,10 +222,14 @@ class TrajectoryEvaluator(EvaluatorBase):
             UserMessage(role="user", content=user_prompt),
         ]
 
+        llm_args = dict(llm_args_evaluator)
+        llm_args.pop("enable_prompt_caching", None)
+
         assistant_message = generate(
             model=llm_evaluator,
             messages=messages,
-            **llm_args_evaluator,
+            **llm_args,
+            enable_prompt_caching=False,
         )
 
         window_evaluation_info = {
@@ -231,7 +237,7 @@ class TrajectoryEvaluator(EvaluatorBase):
             "system_prompt": system_prompt,
             "user_prompt": user_prompt,
             "assistant_message_content": assistant_message.content,
-            "assistent_message_usage": assistant_message.usage
+            "assistant_message_usage": assistant_message.usage
         }
 
         updated_states = copy.deepcopy(current_states)
@@ -358,6 +364,9 @@ class TrajectoryEvaluator(EvaluatorBase):
                 reward_breakdown={RewardType.NL_ASSERTION: 1.0},
             )
 
+        if llm_evaluator is None or llm_args_evaluator is None:
+            raise ValueError("llm_evaluator and llm_args_evaluator must be provided")
+
         env_info = {
             "system_time": "",
             "database": []
@@ -396,15 +405,10 @@ class TrajectoryEvaluator(EvaluatorBase):
             task: Task,
             trajectory: List[Message],
             current_states: dict,
-            llm_evaluator: str = None,
-            llm_args_evaluator: dict = None,
+            llm_evaluator: str,
+            llm_args_evaluator: dict,
             language: str = None,
     ) -> tuple[dict, dict]:
-        if llm_evaluator is None:
-            llm_evaluator = DEFAULT_LLM_EVALUATOR
-        if llm_args_evaluator is None:
-            llm_args_evaluator = models[DEFAULT_LLM_EVALUATOR]
-
         trajectory_content = cls._format_window_content(trajectory)
 
         current_rubrics_str = cls._format_current_rubrics(current_states)
@@ -431,10 +435,14 @@ class TrajectoryEvaluator(EvaluatorBase):
             UserMessage(role="user", content=user_prompt),
         ]
 
+        llm_args = dict(llm_args_evaluator)
+        llm_args.pop("enable_prompt_caching", None)
+
         assistant_message = generate(
             model=llm_evaluator,
             messages=messages,
-            **llm_args_evaluator,
+            **llm_args,
+            enable_prompt_caching=False,
         )
 
         trajectory_evaluation_info = {
@@ -450,11 +458,8 @@ class TrajectoryEvaluator(EvaluatorBase):
             for result in result_data:
                 rubric_idx = result.get("rubric_idx")
                 if rubric_idx and rubric_idx in updated_states:
-                    updated_states[rubric_idx]["justification"] = result.get("justification",
-                                                                             "No justification provided")
-                    updated_states[rubric_idx]["meetExpectation"] = result.get("meetExpectation",
-                                                                               updated_states[rubric_idx][
-                                                                                   "meetExpectation"])
+                    updated_states[rubric_idx]["justification"] = result.get("justification", "No justification provided")
+                    updated_states[rubric_idx]["meetExpectation"] = result.get("meetExpectation", updated_states[rubric_idx]["meetExpectation"])
         else:
             print(f"Warning: Failed to parse LLM response for total trajectory, keeping current states")
 
@@ -489,6 +494,9 @@ class TrajectoryEvaluator(EvaluatorBase):
                 reward_breakdown={RewardType.NL_ASSERTION: 1.0},
             )
 
+        if llm_evaluator is None or llm_args_evaluator is None:
+            raise ValueError("llm_evaluator and llm_args_evaluator must be provided")
+
         env_info = {
             "system_time": "",
             "database": []
@@ -511,7 +519,7 @@ class TrajectoryEvaluator(EvaluatorBase):
 
         memory = ""
         for i, window in enumerate(windows):
-            print(f"Processing window {i + 1}/{len(windows)} with {len(window)} messages")
+            print(f"[{llm_evaluator}][task:{task.id}] Processing window {i + 1}/{len(windows)} with {len(window)} messages")
             window_start_idx = i * step
             current_evaluation, window_eval_info, memory = cls._evaluate_window_sliding_wo_rubric(
                 env_info, task, memory, current_evaluation, window, i + 1, len(windows), window_start_idx,
@@ -552,10 +560,8 @@ class TrajectoryEvaluator(EvaluatorBase):
         Returns:
             tuple: (updated_states, window_evaluation_info)
         """
-        if llm_evaluator is None:
-            llm_evaluator = DEFAULT_LLM_EVALUATOR
-        if llm_args_evaluator is None:
-            llm_args_evaluator = models[DEFAULT_LLM_EVALUATOR]
+        if llm_evaluator is None or llm_args_evaluator is None:
+            raise ValueError("llm_evaluator and llm_args_evaluator must be provided")
 
         window_content = cls._format_window_content(window, window_start_idx)
 
@@ -587,10 +593,14 @@ class TrajectoryEvaluator(EvaluatorBase):
             UserMessage(role="user", content=user_prompt),
         ]
 
+        llm_args = dict(llm_args_evaluator)
+        llm_args.pop("enable_prompt_caching", None)
+
         assistant_message = generate(
             model=llm_evaluator,
             messages=messages,
-            **llm_args_evaluator,
+            **llm_args,
+            enable_prompt_caching=False,
         )
 
         window_evaluation_info = {
@@ -626,8 +636,8 @@ class TrajectoryEvaluator(EvaluatorBase):
             task: Task,
             full_trajectory: List[Message],
             final_state: dict,
-            llm_evaluator: str = None,
-            llm_args_evaluator: dict = None,
+            llm_evaluator: str,
+            llm_args_evaluator: dict,
             language: str = None,
     ) -> RewardInfo:
         if task.evaluation_criteria is None:
@@ -670,7 +680,7 @@ class TrajectoryEvaluator(EvaluatorBase):
         return RewardInfo(
             reward=reward,
             nl_rubrics=[final_nl_rubric_checks],
-            info={"evaluation_method": "full_trajectory_no_rubrics"}
+            info={"evaluation_method": "full_trajectory_no_rubrics"},
         )
 
     @classmethod
@@ -679,15 +689,10 @@ class TrajectoryEvaluator(EvaluatorBase):
             env_info: dict,
             task: Task,
             trajectory: List[Message],
-            llm_evaluator: str = None,
-            llm_args_evaluator: dict = None,
+            llm_evaluator: str,
+            llm_args_evaluator: dict,
             language: str = None,
     ) -> tuple[dict, dict]:
-        if llm_evaluator is None:
-            llm_evaluator = DEFAULT_LLM_EVALUATOR
-        if llm_args_evaluator is None:
-            llm_args_evaluator = models[DEFAULT_LLM_EVALUATOR]
-
         trajectory_content = cls._format_window_content(trajectory)
 
         prompts = get_prompts(language)
@@ -697,27 +702,31 @@ class TrajectoryEvaluator(EvaluatorBase):
         )
 
         user_prompt = f"""
-    # Input
-    <trajectory_content>
-    {trajectory_content}
-    </trajectory_content>
-    """
+# Input
+<trajectory_content>
+{trajectory_content}
+</trajectory_content>
+"""
 
         messages = [
             SystemMessage(role="system", content=system_prompt),
             UserMessage(role="user", content=user_prompt),
         ]
 
+        llm_args = dict(llm_args_evaluator)
+        llm_args.pop("enable_prompt_caching", None)
+
         assistant_message = generate(
             model=llm_evaluator,
             messages=messages,
-            **llm_args_evaluator,
+            **llm_args,
+            enable_prompt_caching=False,
         )
 
         trajectory_evaluation_info = {
             "system_prompt": system_prompt,
             "user_prompt": user_prompt,
-            "assistant_message_content": assistant_message.content
+            "assistant_message_content": assistant_message.content,
         }
 
         result_data = evaluator_extracter(assistant_message.content)
@@ -725,13 +734,12 @@ class TrajectoryEvaluator(EvaluatorBase):
         if result_data and isinstance(result_data, dict):
             updated_states = result_data
         elif result_data and isinstance(result_data, list) and len(result_data) > 0:
-            # If result_data is a list, take the first element
             updated_states = result_data[0]
         else:
             print(f"Warning: Failed to parse LLM response for total trajectory, keeping current states")
             updated_states = {
                 "justification": "Not evaluated yet",
-                "meetExpectation": False
+                "meetExpectation": False,
             }
 
         return updated_states, trajectory_evaluation_info

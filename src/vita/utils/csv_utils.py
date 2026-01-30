@@ -119,17 +119,23 @@ def create_run_summary(results, metrics, config):
         # Generate simulation filename
         simulation_filename = config.save_to if config.save_to else config.re_evaluate_file
 
+        evaluator_llm = ""
+        if results.simulations:
+            ri = results.simulations[0].reward_info
+            if ri and ri.info and ri.info.get("llm_evaluators"):
+                evaluator_llm = ",".join(ri.info.get("llm_evaluators"))
+
         # Create summary row
         summary = {
             "run_timestamp": get_now(),
-            "run_id": f"{get_now()}_{info.environment_info.domain_name}_{info.agent_info.implementation}_{info.user_info.implementation}{'_think' if config.enable_think else ''}",
+            "run_id": f"{get_now()}_{info.environment_info.domain_name}_{info.agent_info.implementation}_{info.user_info.implementation}",
             "simulation_filename": simulation_filename,
             "domain": info.environment_info.domain_name,
             "agent_implementation": info.agent_info.implementation,
             "agent_llm": info.agent_info.llm,
             "user_implementation": info.user_info.implementation,
             "user_llm": info.user_info.llm,
-            "evaluator_llm": config.llm_evaluator,
+            "evaluator_llm": evaluator_llm,
             "num_tasks": total_tasks,
             "num_trials": total_trials,
             "total_simulations": total_simulations,
@@ -145,7 +151,6 @@ def create_run_summary(results, metrics, config):
             "max_steps": info.max_steps,
             "max_errors": info.max_errors,
             "max_concurrency": config.max_concurrency,
-            "enable_think": config.enable_think,
             "evaluation_type": config.evaluation_type,
         }
 

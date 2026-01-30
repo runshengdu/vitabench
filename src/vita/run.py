@@ -3,6 +3,8 @@ import multiprocessing
 import random
 import threading
 from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import as_completed
+import hashlib
 from pathlib import Path
 from typing import Optional
 from datetime import datetime
@@ -22,7 +24,7 @@ from vita.data_model.simulation import (
 from vita.data_model.tasks import Task
 from vita.data_model.simulation import EvaluationType
 from vita.environment.environment import get_cross_environment, EnvironmentInfo
-from vita.evaluator.evaluator import evaluate_simulation
+from vita.evaluator.evaluator import evaluate_simulation, DEFAULT_LLM_EVALUATORS
 from vita.metrics.agent_metrics import compute_metrics
 from vita.orchestrator.orchestrator import Orchestrator
 from vita.registry import RegistryInfo, registry
@@ -31,6 +33,7 @@ from vita.utils.display import ConsoleDisplay
 from vita.utils.pydantic_utils import get_pydantic_hash
 from vita.utils.utils import DATA_DIR, get_commit_hash, get_now, show_dict_diff, global_time
 from vita.utils.csv_utils import save_results_to_csv
+from vita.config import models, DEFAULT_MAX_EVALUATIONS
 
 
 def get_options() -> RegistryInfo:
@@ -99,10 +102,7 @@ def make_run_name(config: RunConfig) -> str:
     clean_llm_user_name = config.llm_user.split("/")[-1]
     user_name = f"{config.user}_{clean_llm_user_name}"
 
-    # Add think mode indicator to the filename if enable_think is True
-    think_suffix = "_think" if config.enable_think else ""
-    
-    return f"{get_now()}_{config.domain}_{agent_name}_{user_name}{think_suffix}"
+    return f"{get_now()}_{config.domain}_{agent_name}_{user_name}"
 
 
 def run_domain(config: RunConfig) -> Results:
@@ -128,11 +128,14 @@ def run_domain(config: RunConfig) -> Results:
     num_trials = config.num_trials
     save_to = config.save_to
     if save_to is None:
-        save_to = f"{make_run_name(config)}.json"
-    save_to = DATA_DIR / "simulations" / save_to
+        llm_agent_dir = config.llm_agent.split("/")[-1].replace("\\", "_").replace(":", "_")
+        domain_dir = config.domain.replace(",", "_").replace("/", "_").replace("\\", "_")
+        save_to = DATA_DIR / "simulations" / llm_agent_dir / domain_dir / f"{get_now()}.json"
+    else:
+        save_to = Path(save_to)
     config.save_to = save_to
     
-    # Run simulations with the specified evaluation type
+    # Run simulations (generation only; evaluation is decoupled)
     simulation_results = run_tasks(
         domain=config.domain,
         tasks=tasks,
@@ -151,22 +154,8 @@ def run_domain(config: RunConfig) -> Results:
         max_concurrency=config.max_concurrency,
         seed=config.seed,
         log_level=config.log_level,
-        enable_think=config.enable_think,
-        llm_evaluator=config.llm_evaluator,
-        llm_args_evaluator=config.llm_args_evaluator,
         language=config.language,
     )
-    
-    metrics = compute_metrics(simulation_results)
-    ConsoleDisplay.display_agent_metrics(metrics)
-
-    if config.csv_output_file and simulation_results.simulations:
-        try:
-            csv_output = config.csv_output_file
-            save_results_to_csv(simulation_results, csv_output, config, metrics)
-            ConsoleDisplay.console.print(f"\n💾 [bold green]Results appended to CSV: {csv_output}[/bold green]")
-        except Exception as e:
-            ConsoleDisplay.console.print(f"\n[bold red]Error saving to CSV: {e}[/bold red]")
 
     return simulation_results
 
@@ -189,9 +178,6 @@ def run_tasks(
     max_concurrency: int = 1,
     seed: Optional[int] = 300,
     log_level: Optional[str] = "INFO",
-    enable_think: bool = False,
-    llm_evaluator: Optional[str] = None,
-    llm_args_evaluator: Optional[dict] = None,
     language: str = None,
 ) -> Results:
     """
@@ -216,7 +202,6 @@ def run_tasks(
         max_concurrency (int): The maximum number of concurrent simulations to run.
         seed (int): The seed to use for the simulation.
         log_level (str): The log level to use.
-        enable_think (bool): Whether to enable think mode for the agent LLM.
     Returns:
         The simulation results and the annotations (if llm_review is True).
     """
@@ -266,22 +251,9 @@ def run_tasks(
     )
     done_runs = set()
     if save_to is not None:
-        # If save_to already exists, check if the user wants to resume the run.
+        # If save_to already exists, resume the run.
         if save_to.exists():
-            response = (
-                ConsoleDisplay.console.input(
-                    "[yellow]File [bold]{}[/bold] already exists. Do you want to resume the run? (y/n)[/yellow] ".format(
-                        save_to
-                    )
-                )
-                .lower()
-                .strip()
-            )
-            if response != "y":
-                raise FileExistsError(
-                    f"File {save_to} already exists. Please delete it or use a different save_to name."
-                )
-            with open(save_to, "r") as fp:
+            with open(save_to, "r", encoding="utf-8") as fp:
                 prev_simulation_results = Results.model_validate_json(fp.read())
                 # Check if the run config has changed
                 if get_pydantic_hash(prev_simulation_results.info) != get_pydantic_hash(
@@ -291,22 +263,7 @@ def run_tasks(
                         prev_simulation_results.info.model_dump(),
                         simulation_results.info.model_dump(),
                     )
-                    ConsoleDisplay.console.print(
-                        f"The run config has changed.\n\n{diff}\n\nDo you want to resume the run? (y/n)"
-                    )
-                    response = (
-                        ConsoleDisplay.console.input(
-                            "[yellow]File [bold]{}[/bold] already exists. Do you want to resume the run? (y/n)[/yellow] ".format(
-                                save_to
-                            )
-                        )
-                        .lower()
-                        .strip()
-                    )
-                    if response != "y":
-                        raise ValueError(
-                            "The run config has changed. Please delete the existing file or use a different save_to name."
-                        )
+                    raise ValueError(f"The run config has changed. Please delete the existing file or use a different save_to name.\n\n{diff}")
                 # Check if the task set has changed
                 if not all(
                     get_pydantic_hash(task) == get_pydantic_hash(prev_task)
@@ -335,7 +292,7 @@ def run_tasks(
             if not save_to.parent.exists():
                 save_to.parent.mkdir(parents=True, exist_ok=True)
             logger.info(f"Saving simulation batch to {save_to}")
-            with open(save_to, "w") as fp:
+            with open(save_to, "w", encoding="utf-8") as fp:
                 fp.write(simulation_results.model_dump_json(indent=2))
 
     def _save(simulation: SimulationRun):
@@ -346,7 +303,7 @@ def run_tasks(
         if save_to is None:
             return
         with lock:
-            with open(save_to, "r") as fp:
+            with open(save_to, "r", encoding="utf-8") as fp:
                 ckpt = json.load(fp)
             
             simulation_dict = simulation.model_dump()
@@ -374,9 +331,6 @@ def run_tasks(
                 evaluation_type=evaluation_type,
                 seed=seed,
                 max_retries=3, # Each task retries 3 times
-                enable_think=enable_think,
-                llm_evaluator=llm_evaluator,
-                llm_args_evaluator=llm_args_evaluator,
                 language=language,
             )
             simulation.trial = trial
@@ -402,6 +356,12 @@ def run_tasks(
             progress_str = f"{i}/{len(tasks)} (trial {trial + 1}/{num_trials})"
             args.append((task, trial, seeds[trial], progress_str))
 
+    if not args:
+        ConsoleDisplay.console.print(
+            f"[bold yellow]All simulations are already generated ({len(done_runs)} runs). Nothing to do.[/bold yellow]"
+        )
+        return simulation_results
+
     with ThreadPoolExecutor(max_workers=max_concurrency) as executor:
         res = list(executor.map(_run, *zip(*args)))
         # Separate successful and failed tasks
@@ -418,7 +378,7 @@ def run_tasks(
 
     # Count successful and failed tasks
     ConsoleDisplay.console.print(
-        f"\n✨ [bold green]Successfully completed all simulations![/bold green]\n"
+        f"\n✨ [bold green]Successfully generated all simulations![/bold green]\n"
         f"📊 [bold blue]Statistics:[/bold blue]\n"
         f"  ✅ Successful tasks: {len(successful_sims)}\n"
         f"  ❌ Failed tasks: {len(failed_sims)}\n"
@@ -452,9 +412,6 @@ def run_task(
     evaluation_type: EvaluationType = "trajectory",
     seed: Optional[int] = None,
     max_retries: int = 3,  # Add maximum retry count parameter
-    enable_think: bool = False,
-    llm_evaluator: Optional[str] = None,
-    llm_args_evaluator: Optional[dict] = None,
     language: str = None,
 ) -> SimulationRun:
     """
@@ -499,9 +456,6 @@ def run_task(
                 max_errors=max_errors,
                 evaluation_type=evaluation_type,
                 seed=seed,
-                enable_think=enable_think,
-                llm_evaluator=llm_evaluator,
-                llm_args_evaluator=llm_args_evaluator,
                 language=language
             )
         except Exception as e:
@@ -528,9 +482,6 @@ def _run_task_internal(
     max_errors: int = 10,
     evaluation_type: EvaluationType = "trajectory",
     seed: Optional[int] = None,
-    enable_think: bool = False,
-    llm_evaluator: Optional[str] = None,
-    llm_args_evaluator: Optional[dict] = None,
     language: str = None,
 ) -> SimulationRun:
     """
@@ -562,7 +513,6 @@ def _run_task_internal(
             llm=llm_agent,
             llm_args=llm_args_agent,
             time=time,
-            enable_think=enable_think,
             language=language,
         )
     elif issubclass(AgentConstructor, LLMSoloAgent):
@@ -573,7 +523,6 @@ def _run_task_internal(
             llm=llm_agent,
             llm_args=llm_args_agent,
             time=time,
-            enable_think=enable_think,
             language=language,
         )
     else:
@@ -605,20 +554,8 @@ def _run_task_internal(
     )
     simulation = orchestrator.run()
 
-    reward_info = evaluate_simulation(
-        domain=domain,
-        task=task,
-        simulation=simulation,
-        evaluation_type=evaluation_type,
-        llm_evaluator=llm_evaluator,
-        llm_args_evaluator=llm_args_evaluator,
-        language=language,
-    )
-    simulation.reward_info = reward_info
-    
     logger.info(
-        f"FINISHED SIMULATION: Domain: {domain}, Task: {task.id}, Agent: {agent.__class__.__name__}, User: {user.__class__.__name__}. "
-        f"Reward: {reward_info.reward} | {reward_info.reward_breakdown}"
+        f"FINISHED SIMULATION: Domain: {domain}, Task: {task.id}, Agent: {agent.__class__.__name__}, User: {user.__class__.__name__}."
     )
     
     return simulation
@@ -645,6 +582,8 @@ def get_info(
         
         cleaned = {}
         for key, value in llm_args.items():
+            if key in {"api_key", "headers"}:
+                continue
             if hasattr(value, '__class__') and value.__class__.__name__ == 'type':
                 # Replace type objects with their class name
                 cleaned[key] = value.__name__
@@ -722,8 +661,16 @@ def re_evaluate_simulation(config: RunConfig) -> Results:
         raise FileNotFoundError(f"Simulation file not found: {re_evaluate_file}")
     
     # Load the original results
-    with open(simulation_path, "r") as fp:
-        original_results = Results.model_validate_json(fp.read())
+    raw_text = None
+    for enc in ("utf-8-sig", "utf-8", "gb18030"):
+        try:
+            raw_text = simulation_path.read_text(encoding=enc)
+            break
+        except UnicodeDecodeError:
+            continue
+    if raw_text is None:
+        raw_text = simulation_path.read_text()
+    original_results = Results.model_validate_json(raw_text)
     
     logger.info(f"Loaded simulation file: {re_evaluate_file}")
     logger.info(f"Found {len(original_results.simulations)} simulations")
@@ -731,10 +678,22 @@ def re_evaluate_simulation(config: RunConfig) -> Results:
     # Handle re-running specific tasks if requested
     if re_run and task_ids_to_rerun:
         logger.info(f"Re-running tasks: {task_ids_to_rerun}")
+
+        domain_for_rerun = original_results.info.environment_info.domain_name
+        agent_for_rerun = original_results.info.agent_info.implementation
+        user_for_rerun = original_results.info.user_info.implementation
+        llm_agent_for_rerun = original_results.info.agent_info.llm
+        llm_args_agent_for_rerun = original_results.info.agent_info.llm_args
+        llm_user_for_rerun = original_results.info.user_info.llm
+        llm_args_user_for_rerun = original_results.info.user_info.llm_args
+        num_trials_for_rerun = original_results.info.num_trials
+        max_steps_for_rerun = original_results.info.max_steps
+        max_errors_for_rerun = original_results.info.max_errors
+        seed_for_rerun = original_results.info.seed
         
         # Get tasks to re-run
         if config.task_set_name is None:
-            task_set_name = config.domain
+            task_set_name = domain_for_rerun
         else:
             task_set_name = config.task_set_name
         
@@ -742,26 +701,23 @@ def re_evaluate_simulation(config: RunConfig) -> Results:
         
         # Run the specific tasks
         rerun_results = run_tasks(
-            domain=config.domain,
+            domain=domain_for_rerun,
             tasks=tasks_to_rerun,
-            agent=config.agent,
-            user=config.user,
-            llm_agent=config.llm_agent,
-            llm_args_agent=config.llm_args_agent,
-            llm_user=config.llm_user,
-            llm_args_user=config.llm_args_user,
-            num_trials=config.num_trials,
-            max_steps=config.max_steps,
-            max_errors=config.max_errors,
+            agent=agent_for_rerun,
+            user=user_for_rerun,
+            llm_agent=llm_agent_for_rerun,
+            llm_args_agent=llm_args_agent_for_rerun,
+            llm_user=llm_user_for_rerun,
+            llm_args_user=llm_args_user_for_rerun,
+            num_trials=num_trials_for_rerun,
+            max_steps=max_steps_for_rerun,
+            max_errors=max_errors_for_rerun,
             save_to=None,  # Don't save intermediate results
             console_display=True,
             evaluation_type=evaluation_type,
             max_concurrency=config.max_concurrency,
-            seed=config.seed,
+            seed=seed_for_rerun,
             log_level=config.log_level,
-            enable_think=config.enable_think,
-            llm_evaluator=config.llm_evaluator,
-            llm_args_evaluator=config.llm_args_evaluator,
             language=config.language,
         )
         
@@ -791,15 +747,29 @@ def re_evaluate_simulation(config: RunConfig) -> Results:
             final_tasks = original_results.tasks + new_tasks
             logger.info(f"Added {len(new_tasks)} new tasks to the task list")
     
-    # Create new results object for re-evaluation
-    re_eval_results = Results(
-        timestamp=get_now(),
-        info=original_results.info,
-        tasks=final_tasks,
-        simulations=[],
+    if save_to is None:
+        save_to = simulation_path
+    if isinstance(save_to, str):
+        save_to = Path(save_to)
+
+    llm_evaluators = DEFAULT_LLM_EVALUATORS
+    llm_args_evaluators = [models[name] for name in llm_evaluators]
+    evaluator_cfg_hash = _hash_dict(
+        {"llm_evaluators": llm_evaluators, "llm_args_evaluators": llm_args_evaluators}
     )
+
+    def _is_already_evaluated(sim: SimulationRun) -> bool:
+        if sim.reward_info is None:
+            return False
+        info = sim.reward_info.info or {}
+        return (
+            info.get("evaluation_type") == evaluation_type
+            and info.get("llm_evaluators") == llm_evaluators
+            and info.get("llm_args_evaluators_hash") == evaluator_cfg_hash
+        )
+
+    original_results.timestamp = get_now()
     
-    # Asynchronously re-evaluate each simulation
     def _re_evaluate_single(simulation, task_dict, domain_name, progress_str):
         """Function to re-evaluate a single simulation"""
         logger.info(f"{progress_str} Re-evaluating simulation: {simulation.task_id}")
@@ -815,69 +785,82 @@ def re_evaluate_simulation(config: RunConfig) -> Results:
                 task=task,
                 evaluation_type=evaluation_type,
                 domain=domain_name,
-                llm_evaluator=config.llm_evaluator,
-                llm_args_evaluator=config.llm_args_evaluator,
+                llm_evaluators=llm_evaluators,
+                llm_args_evaluators=llm_args_evaluators,
                 language=config.language,
+                parallel_evaluators=parallel_evaluators,
             )
-            
-            # Create a new simulation run with updated reward info
-            re_eval_simulation = SimulationRun(
-                id=simulation.id,
-                task_id=simulation.task_id,
-                timestamp=simulation.timestamp,
-                start_time=simulation.start_time,
-                end_time=simulation.end_time,
-                duration=simulation.duration,
-                termination_reason=simulation.termination_reason,
-                agent_cost=simulation.agent_cost,
-                user_cost=simulation.user_cost,
-                reward_info=reward_info,  # Updated reward info
-                messages=simulation.messages,  # Keep original messages
-                states=simulation.states,  # Keep original states
-                trial=simulation.trial,
-                seed=simulation.seed,
-            )
+
+            if reward_info.info is None:
+                reward_info.info = {}
+            reward_info.info = {
+                **(reward_info.info or {}),
+                "evaluation_type": evaluation_type,
+                "llm_evaluators": llm_evaluators,
+                "llm_args_evaluators_hash": evaluator_cfg_hash,
+                "evaluated_at": get_now(),
+            }
             
             logger.info(f"Re-evaluation completed for {simulation.task_id}: reward = {reward_info.reward}")
-            return {"status": "success", "simulation": re_eval_simulation}
+            return {"status": "success", "simulation": simulation, "reward_info": reward_info}
             
         except Exception as e:
             logger.error(f"Error re-evaluating simulation {simulation.task_id}: {e}")
             return {"status": "failed", "simulation": simulation, "error": str(e)}
-    
+
     # Create task dictionary for quick lookup
     task_dict = {task.id: task for task in final_tasks}
     domain_name = original_results.info.environment_info.domain_name
-    
-    # Prepare parameters for asynchronous execution
-    args = []
+
+    lock = threading.Lock()
+
+    to_eval_indices = []
     for i, simulation in enumerate(original_results.simulations):
-        progress_str = f"({i + 1}/{len(original_results.simulations)})"
-        args.append((simulation, task_dict, domain_name, progress_str))
+        if _is_already_evaluated(simulation):
+            continue
+        to_eval_indices.append(i)
+
+    total = len(original_results.simulations)
+    to_eval_total = len(to_eval_indices)
+    ConsoleDisplay.console.print(
+        f"[bold yellow]Re-evaluation resume: {total - to_eval_total}/{total} already evaluated, {to_eval_total} remaining.[/bold yellow]"
+    )
+
+    def _checkpoint_save():
+        with lock:
+            if not save_to.parent.exists():
+                save_to.parent.mkdir(parents=True, exist_ok=True)
+            original_results.save(save_to)
+
+    max_evaluations = getattr(config, 'max_evaluations', DEFAULT_MAX_EVALUATIONS)
+    num_evaluators = len(llm_evaluators) if llm_evaluators else 1
+    parallel_evaluators = num_evaluators > 1
+    max_workers = max(1, max_evaluations)
+    futures = {}
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        for j, idx in enumerate(to_eval_indices):
+            simulation = original_results.simulations[idx]
+            progress_str = f"({j + 1}/{to_eval_total})"
+            fut = executor.submit(_re_evaluate_single, simulation, task_dict, domain_name, progress_str)
+            futures[fut] = idx
+
+        for fut in as_completed(futures):
+            idx = futures[fut]
+            result = fut.result()
+            if result["status"] == "success":
+                original_results.simulations[idx].reward_info = result["reward_info"]
+                _checkpoint_save()
     
-    # Use thread pool for asynchronous re-evaluation execution
-    max_concurrency = getattr(config, 'max_concurrency', 4)  # Default concurrency is 4
-    with ThreadPoolExecutor(max_workers=max_concurrency) as executor:
-        results = list(executor.map(_re_evaluate_single, *zip(*args)))
-    
-    # Process results
     successful_count = 0
     failed_count = 0
-    skipped_count = 0
-    
-    for result in results:
-        if result["status"] == "success":
-            re_eval_results.simulations.append(result["simulation"])
-            successful_count += 1
-        elif result["status"] == "failed":
-            # For failed cases, add original simulation but throw error
-            re_eval_results.simulations.append(result["simulation"])
+    skipped_count = total - to_eval_total
+
+    for i, sim in enumerate(original_results.simulations):
+        if _is_already_evaluated(sim):
+            if i in to_eval_indices:
+                successful_count += 1
+        else:
             failed_count += 1
-            print(f"Error of {result['simulation'].task_id} trial {result['simulation'].trial} re-evaluate: {result['error']}")
-        elif result["status"] == "skipped":
-            # For skipped cases, add original simulation
-            re_eval_results.simulations.append(result["simulation"])
-            skipped_count += 1
     
     # Output statistics
     ConsoleDisplay.console.print(
@@ -886,35 +869,31 @@ def re_evaluate_simulation(config: RunConfig) -> Results:
         f"  ✅ Successfully re-evaluated: {successful_count}\n"
         f"  ❌ Failed: {failed_count}\n"
         f"  ⏭️  Skipped: {skipped_count}\n"
-        f"  📝 Total: {len(results)}"
+        f"  📝 Total: {total}"
     )
-    
-    metrics = compute_metrics(re_eval_results)
+
+    if any(sim.reward_info is None for sim in original_results.simulations):
+        ConsoleDisplay.console.print(
+            "[bold yellow]Some simulations have no reward_info; skipping metrics computation.[/bold yellow]"
+        )
+        return original_results
+
+    metrics = compute_metrics(original_results)
     ConsoleDisplay.display_agent_metrics(metrics)
 
-    if config.csv_output_file and re_eval_results.simulations:
+    if config.csv_output_file and original_results.simulations:
         try:
             csv_output = config.csv_output_file
-            save_results_to_csv(re_eval_results, csv_output, config, metrics)
+            save_results_to_csv(original_results, csv_output, config, metrics)
             ConsoleDisplay.console.print(f"\n💾 [bold green]Results appended to CSV: {csv_output}[/bold green]")
         except Exception as e:
             ConsoleDisplay.console.print(f"\n[bold red]Error saving to CSV: {e}[/bold red]")
 
-    # Save results if save_to is specified
-    if save_to is not None:
-        if isinstance(save_to, str):
-            save_to = Path(save_to)
-        
-        # Create parent directories if needed
-        if not save_to.parent.exists():
-            save_to.parent.mkdir(parents=True, exist_ok=True)
-        
-        # Generate filename if not provided
-        if save_to.is_dir() or save_to.name == "":
-            original_name = simulation_path.stem
-            save_to = save_to / f"{original_name}_re_eval_{evaluation_type}.json"
-        
-        logger.info(f"Saving re-evaluation results to: {save_to}")
-        re_eval_results.save(save_to)
-    
-    return re_eval_results
+    logger.info(f"Saving re-evaluation results to: {save_to}")
+    original_results.save(save_to)
+    return original_results
+
+
+def _hash_dict(obj: dict) -> str:
+    dumped = json.dumps(obj or {}, sort_keys=True, ensure_ascii=False, default=str)
+    return hashlib.md5(dumped.encode("utf-8")).hexdigest()
