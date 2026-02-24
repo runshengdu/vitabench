@@ -31,12 +31,14 @@ models:
     base_url: https://api.minimaxi.com/v1
     api_key: "${MINIMAX_API_KEY}"
     max_tokens: 60000
+    extra_body: {reasoning_split: true}
   
-  - name: minimax-m2.1
+  - name: minimax-m2.5
     temperature: 1.0
     base_url: https://api.minimaxi.com/v1
     api_key: "${MINIMAX_API_KEY}"
     max_tokens: 60000
+    extra_body: {reasoning_split: true}
   
   - name: deepseek-chat
     temperature: 0.0

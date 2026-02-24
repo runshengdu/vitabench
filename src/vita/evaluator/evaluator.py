@@ -64,13 +64,21 @@ def _vote_from_reward(reward: float) -> int:
     return 1 if reward >= 0.5 else 0
 
 
-def _call_with_retries(fn, retries: int = 3):
+def _call_with_retries(fn, retries: int = 3, desc: str | None = None):
     last_exc = None
     for attempt in range(1, retries + 1):
         try:
             return fn(), attempt, None
         except Exception as e:
             last_exc = e
+            if desc:
+                logger.warning(
+                    f"{desc} retry attempt={attempt}/{retries} error_type={type(e).__name__} error={e}"
+                )
+            else:
+                logger.warning(
+                    f"retry attempt={attempt}/{retries} error_type={type(e).__name__} error={e}"
+                )
     return None, retries, last_exc
 
 def evaluate_simulation(
@@ -133,6 +141,7 @@ def evaluate_simulation(
                 language=language,
             ),
             retries=3,
+            desc=f"{log_prefix} evaluator={name}",
         )
         return name, reward_info, attempts, err
 

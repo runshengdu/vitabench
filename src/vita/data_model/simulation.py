@@ -1,4 +1,6 @@
 import json
+import os
+import tempfile
 from copy import deepcopy
 from enum import Enum
 from pathlib import Path
@@ -365,8 +367,34 @@ class Results(BaseModel):
         """
         Save the results to a file.
         """
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(self.model_dump_json(indent=4))
+        if not path.parent.exists():
+            path.parent.mkdir(parents=True, exist_ok=True)
+ 
+        tmp_name = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                dir=str(path.parent),
+                prefix=f"{path.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as f:
+                tmp_name = f.name
+                f.write(self.model_dump_json(indent=4))
+                f.flush()
+                try:
+                    os.fsync(f.fileno())
+                except OSError:
+                    pass
+ 
+            os.replace(tmp_name, path)
+        finally:
+            if tmp_name is not None and os.path.exists(tmp_name):
+                try:
+                    os.remove(tmp_name)
+                except OSError:
+                    pass
 
     def to_df(self) -> pd.DataFrame:
         """

@@ -330,7 +330,7 @@ def run_tasks(
                 max_errors=max_errors,
                 evaluation_type=evaluation_type,
                 seed=seed,
-                max_retries=3, # Each task retries 3 times
+                max_retries=1, # Each task retries 3 times
                 language=language,
             )
             simulation.trial = trial
@@ -670,6 +670,17 @@ def re_evaluate_simulation(config: RunConfig) -> Results:
             continue
     if raw_text is None:
         raw_text = simulation_path.read_text()
+    if raw_text.strip() == "":
+        try:
+            file_size = simulation_path.stat().st_size
+        except OSError:
+            file_size = None
+        size_msg = f" (size={file_size} bytes)" if file_size is not None else ""
+        raise ValueError(
+            f"Simulation file is empty or whitespace: {simulation_path}{size_msg}. "
+            "This usually happens if evaluation was interrupted while overwriting the file. "
+            "Use a non-empty results file, or rerun the simulation generation."
+        )
     original_results = Results.model_validate_json(raw_text)
     
     logger.info(f"Loaded simulation file: {re_evaluate_file}")

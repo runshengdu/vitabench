@@ -3,6 +3,7 @@ models:
     temperature: 0.0
     base_url: https://openrouter.ai/api/v1
     api_key: "${OPENROUTER_API_KEY}"
+    extra_body: {reasoning: {effort: "minimal"}}
     max_tokens: 60000
 
   - name: deepseek-chat
@@ -12,15 +13,22 @@ models:
     max_tokens: 8000
 
   - name: glm-4.7
-    temperature: 0.0
+    temperature: 1.0
     base_url: https://open.bigmodel.cn/api/paas/v4
     api_key: "${GLM_API_KEY}" 
-    extra_body: {"thinking": {"type": "disabled"}}
-    max_tokens: 30000
+    extra_body: {"thinking": {"type": "enabled"}}
+    max_tokens: 60000
 
   - name: doubao-seed-1-8-251228
-    temperature: 0.0
+    temperature: 1.0
     base_url: https://ark.cn-beijing.volces.com/api/v3
     api_key: "${ARK_API_KEY}"
-    extra_body: {"reasoning_effort": "minimal"}
-    max_tokens: 30000
+    extra_body: {"reasoning_effort": "medium"}
+    max_tokens: 32000
+  
+  - name: kimi-k2.5
+    temperature: 1.0
+    base_url: https://api.moonshot.cn/v1
+    api_key: "${MOONSHOT_API_KEY}"
+    max_tokens: 60000
+    extra_body: {"thinking": {"type": "enabled"}}

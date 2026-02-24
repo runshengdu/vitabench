@@ -120,7 +120,7 @@ DEFAULT_MAX_STEPS = 120
 DEFAULT_MAX_RETRIES = 3
 DEFAULT_MAX_ERRORS = 10
 DEFAULT_SEED = 300
-DEFAULT_MAX_CONCURRENCY = 100
+DEFAULT_MAX_CONCURRENCY = 30
 DEFAULT_MAX_EVALUATIONS = 50
 DEFAULT_NUM_TRIALS = 1
 DEFAULT_SAVE_TO = None
@@ -131,10 +131,10 @@ DEFAULT_EVALUATION_TYPE = "trajectory"
 # LLM
 DEFAULT_AGENT_IMPLEMENTATION = "llm_agent"
 DEFAULT_USER_IMPLEMENTATION = "user_simulator"
-DEFAULT_LLM_AGENT = "anthropic/claude-sonnet-4.5"
-DEFAULT_LLM_USER = "google/gemini-3-flash-preview"
+DEFAULT_LLM_AGENT = "openai/gpt-5.2"
+DEFAULT_LLM_USER = "kimi-k2.5"
 DEFAULT_LLM_EVALUATORS = [
-    "google/gemini-3-flash-preview",
     "doubao-seed-1-8-251228",
+    "kimi-k2.5",
     "glm-4.7",
 ]
