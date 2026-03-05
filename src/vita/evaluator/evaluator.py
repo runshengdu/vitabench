@@ -140,7 +140,7 @@ def evaluate_simulation(
                 llm_args_evaluator=args,
                 language=language,
             ),
-            retries=3,
+            retries=2,
             desc=f"{log_prefix} evaluator={name}",
         )
         return name, reward_info, attempts, err
